@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alavancas - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .form-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+    .form-grid .full { grid-column:1 / -1; }
+    .form-grid label { display:block; font-size:11px; color:#8b949e;
+                       margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
+      outline:none; border-color:#58a6ff;
+    }
+    .form-grid textarea { resize:vertical; min-height:60px; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d;
+             font-size:13px; }
+    th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+         font-weight:600; }
+    tr:hover td { background:#1f2630; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px;
+            font-size:11px; font-weight:600; }
+    .pill-on { background:#0d3920; color:#3fb950; }
+    .pill-off { background:#3a1e1f; color:#f85149; }
+    .tipo-pill { background:#1c2733; color:#58a6ff; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px;
+           font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .row-actions { display:flex; gap:6px; }
