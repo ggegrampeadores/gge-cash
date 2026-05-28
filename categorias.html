@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Categorias - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .form-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+    .form-grid .full { grid-column:1 / -1; }
+    .form-grid label { display:block; font-size:11px; color:#8b949e;
+                       margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
+      outline:none; border-color:#58a6ff;
+    }
+    .form-grid textarea { resize:vertical; min-height:60px; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; transition: background .15s; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d;
+             font-size:13px; }
+    th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+         font-weight:600; }
+    tr:hover td { background:#1f2630; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px;
+            font-size:11px; font-weight:600; }
+    .pill-on { background:#0d3920; color:#3fb950; }
+    .pill-off { background:#3a1e1f; color:#f85149; }
+    .priority { font-weight:600; color:#58a6ff; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px;
+           font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:4px 10px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Categorias de Despesa</h1>
+    <p class="subtitle">Hierarquia de prioridade e dias maximos administraveis de atraso por tipologia do Bling.</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="card">
+      <h2 id="form-title">+ Nova categoria</h2>
+      <div class="form-grid">
+        <div>
+          <label>Nome (interno)</label>
+          <input id="f_nome" placeholder="ex: Folha de pagamento">
+        </div>
+        <div>
+          <label>Tipologia Bling</label>
+          <input id="f_nome_bling" placeholder="como aparece no Bling">
+        </div>
+        <div>
+          <label>Prioridade (1=paga 1º)</label>
+          <input id="f_prioridade" type="number" min="1" max="10" value="5">
+        </div>
+        <div>
+          <label>Dias max atraso</label>
+          <input id="f_dias" type="number" min="0" value="0">
+        </div>
+        <div>
+          <label>Custo atraso (% a.d.)</label>
+          <input id="f_pct" type="number" step="0.001" min="0" value="0">
+        </div>
+        <div>
+          <label>Custo atraso (R$ fixo/dia)</label>
+          <input id="f_fixo" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div>
+          <label>Ativo</label>
+          <select id="f_ativo">
+            <option value="true">Sim</option>
+            <option value="false">Nao</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Observacao</label>
+          <textarea id="f_obs" placeholder="ex: pagamento dia 5 ate dia 20 sem multa"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btn-salvar">Salvar</button>
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edicao</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Categorias cadastradas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px;">Prio</th>
+            <th>Nome</th>
+            <th>Bling</th>
+            <th style="width:90px;">Dias max</th>
+            <th style="width:110px;">Custo % dia</th>
+            <th style="width:120px;">Custo R$ dia</th>
+            <th style="width:60px;">Ativo</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_categorias').select('*').order('prioridade').order('nome');
+      if (r.error) { showMsg('Erro ao carregar: ' + r.error.message, 'error'); return; }
+      var html = '';
+      (r.data || []).forEach(function(c) {
+        html += '<tr>'
+             +  '<td><span class="priority">' + c.prioridade + '</span></td>'
+             +  '<td>' + (c.nome || '') + '</td>'
+             +  '<td style="color:#8b949e;">' + (c.nome_bling || '') + '</td>'
+             +  '<td>' + (c.dias_max_atraso || 0) + '</td>'
+             +  '<td>' + (Number(c.custo_dia_atraso_pct || 0).toFixed(3)) + '%</td>'
+             +  '<td>' + fmtBRL(c.custo_dia_atraso_fixo || 0) + '</td>'
+             +  '<td>' + (c.ativo ? '<span class="pill pill-on">SIM</span>' : '<span class="pill pill-off">NAO</span>') + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + c.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="excluir(\'' + c.id + '\')">Excluir</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="8" style="text-align:center; color:#8b949e; padding:30px;">Nenhuma categoria cadastrada ainda.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Nova categoria';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_nome').value = '';
+      document.getElementById('f_nome_bling').value = '';
+      document.getElementById('f_prioridade').value = '5';
+      document.getElementById('f_dias').value = '0';
+      document.getElementById('f_pct').value = '0';
+      document.getElementById('f_fixo').value = '0';
+      document.getElementById('f_ativo').value = 'true';
+      document.getElementById('f_obs').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_categorias').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var c = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando: ' + c.nome;
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_nome').value = c.nome || '';
+      document.getElementById('f_nome_bling').value = c.nome_bling || '';
+      document.getElementById('f_prioridade').value = c.prioridade;
+      document.getElementById('f_dias').value = c.dias_max_atraso || 0;
+      document.getElementById('f_pct').value = c.custo_dia_atraso_pct || 0;
+      document.getElementById('f_fixo').value = c.custo_dia_atraso_fixo || 0;
+      document.getElementById('f_ativo').value = c.ativo ? 'true' : 'false';
+      document.getElementById('f_obs').value = c.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.excluir = async function(id) {
+      if (!confirm('Excluir esta categoria?')) return;
+      var r = await sb.from('cash_categorias').delete().eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Categoria excluida.', 'success');
+      carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var nome = document.getElementById('f_nome').value.trim();
+      if (!nome) { showMsg('Nome e obrigatorio.', 'error'); return; }
+      var payload = {
+        nome: nome,
+        nome_bling: document.getElementById('f_nome_bling').value.trim() || null,
+        prioridade: parseInt(document.getElementById('f_prioridade').value) || 5,
+        dias_max_atraso: parseInt(document.getElementById('f_dias').value) || 0,
+        custo_dia_atraso_pct: parseFloat(document.getElementById('f_pct').value) || 0,
+        custo_dia_atraso_fixo: parseFloat(document.getElementById('f_fixo').value) || 0,
+        ativo: document.getElementById('f_ativo').value === 'true',
+        observacao: document.getElementById('f_obs').value.trim() || null,
+        atualizado_em: new Date().toISOString()
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_categorias').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_categorias').insert(payload);
+      if (r.error) { showMsg('Erro ao salvar: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Categoria atualizada.' : 'Categoria criada.', 'success');
+      limparForm();
+      carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+
+    carregar();
+  </script>
+</body>
+</html>
