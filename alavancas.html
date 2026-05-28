@@ -55,3 +55,235 @@
     .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
     .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
     .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:4px 10px; font-size:12px; }
+    .field-hint { font-size:10px; color:#8b949e; margin-top:3px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Alavancas de Liquidez</h1>
+    <p class="subtitle">Modalidades de antecipacao e emprestimo. Cadastre taxa, limite, prazo de liberacao e forma de pagamento.</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="card">
+      <h2 id="form-title">+ Nova alavanca</h2>
+      <div class="form-grid">
+        <div>
+          <label>Nome</label>
+          <input id="f_nome" placeholder="ex: Bradesco Desconto de Titulos">
+        </div>
+        <div>
+          <label>Tipo</label>
+          <select id="f_tipo">
+            <option value="desconto_titulos">Desconto de titulos</option>
+            <option value="antecipacao_marketplace">Antecipacao marketplace</option>
+            <option value="emprestimo_classico">Emprestimo classico</option>
+            <option value="emprestimo_percentual_vendas">Emprestimo % das vendas</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label>Taxa % a.m.</label>
+          <input id="f_taxa_mensal" type="number" step="0.01" min="0" value="0">
+          <div class="field-hint">Juros mensal nominal</div>
+        </div>
+        <div>
+          <label>Taxa fixa %</label>
+          <input id="f_taxa_fixa" type="number" step="0.01" min="0" value="0">
+          <div class="field-hint">Taxa cobrada uma vez sobre o valor</div>
+        </div>
+        <div>
+          <label>Limite disponivel (R$)</label>
+          <input id="f_limite" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div>
+          <label>Prazo liberacao (dias)</label>
+          <input id="f_lib" type="number" min="0" value="0">
+          <div class="field-hint">D+0, D+1, D+2...</div>
+        </div>
+        <div>
+          <label>Forma pagamento</label>
+          <select id="f_forma">
+            <option value="vencimento_titulos">No vencimento dos titulos</option>
+            <option value="parcelado_fixo">Parcelado fixo</option>
+            <option value="percentual_vendas">% sobre vendas futuras</option>
+            <option value="a_vista_no_vencimento_unico">A vista, vencimento unico</option>
+          </select>
+        </div>
+        <div>
+          <label>Prazo pagamento (dias)</label>
+          <input id="f_prazo" type="number" min="0" value="30">
+        </div>
+        <div>
+          <label>% vendas p/ pagto</label>
+          <input id="f_pct_vendas" type="number" step="0.01" min="0" value="0">
+          <div class="field-hint">Apenas para emprestimo % vendas</div>
+        </div>
+        <div>
+          <label>Ativo</label>
+          <select id="f_ativo">
+            <option value="true">Sim</option>
+            <option value="false">Nao</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Observacao</label>
+          <textarea id="f_obs" placeholder="condicoes, contato, restricoes"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btn-salvar">Salvar</button>
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edicao</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Alavancas cadastradas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Taxa a.m.</th>
+            <th>Tx fixa</th>
+            <th>Limite</th>
+            <th>Lib</th>
+            <th>Pagto</th>
+            <th>Ativo</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    var TIPOS = {
+      'desconto_titulos': 'Desconto titulos',
+      'antecipacao_marketplace': 'Antecip. marketplace',
+      'emprestimo_classico': 'Empr. classico',
+      'emprestimo_percentual_vendas': 'Empr. % vendas',
+      'outro': 'Outro'
+    };
+    var FORMAS = {
+      'vencimento_titulos': 'No vencto dos titulos',
+      'parcelado_fixo': 'Parcelado fixo',
+      'percentual_vendas': '% sobre vendas',
+      'a_vista_no_vencimento_unico': 'A vista venc unico'
+    };
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_alavancas').select('*').order('nome');
+      if (r.error) { showMsg('Erro ao carregar: ' + r.error.message, 'error'); return; }
+      var html = '';
+      (r.data || []).forEach(function(a) {
+        html += '<tr>'
+             +  '<td><strong>' + (a.nome || '') + '</strong></td>'
+             +  '<td><span class="pill tipo-pill">' + (TIPOS[a.tipo] || a.tipo) + '</span></td>'
+             +  '<td>' + Number(a.taxa_pct_mensal || 0).toFixed(2) + '%</td>'
+             +  '<td>' + Number(a.taxa_fixa_pct || 0).toFixed(2) + '%</td>'
+             +  '<td>' + fmtBRL(a.limite_disponivel || 0) + '</td>'
+             +  '<td>D+' + (a.prazo_liberacao_dias || 0) + '</td>'
+             +  '<td style="font-size:11px;">' + (FORMAS[a.forma_pagamento] || '') + '</td>'
+             +  '<td>' + (a.ativo ? '<span class="pill pill-on">SIM</span>' : '<span class="pill pill-off">NAO</span>') + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + a.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="excluir(\'' + a.id + '\')">Excluir</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="9" style="text-align:center; color:#8b949e; padding:30px;">Nenhuma alavanca cadastrada ainda.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Nova alavanca';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_nome').value = '';
+      document.getElementById('f_tipo').value = 'desconto_titulos';
+      document.getElementById('f_taxa_mensal').value = '0';
+      document.getElementById('f_taxa_fixa').value = '0';
+      document.getElementById('f_limite').value = '0';
+      document.getElementById('f_lib').value = '0';
+      document.getElementById('f_forma').value = 'vencimento_titulos';
+      document.getElementById('f_prazo').value = '30';
+      document.getElementById('f_pct_vendas').value = '0';
+      document.getElementById('f_ativo').value = 'true';
+      document.getElementById('f_obs').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_alavancas').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var a = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando: ' + a.nome;
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_nome').value = a.nome || '';
+      document.getElementById('f_tipo').value = a.tipo || 'desconto_titulos';
+      document.getElementById('f_taxa_mensal').value = a.taxa_pct_mensal || 0;
+      document.getElementById('f_taxa_fixa').value = a.taxa_fixa_pct || 0;
+      document.getElementById('f_limite').value = a.limite_disponivel || 0;
+      document.getElementById('f_lib').value = a.prazo_liberacao_dias || 0;
+      document.getElementById('f_forma').value = a.forma_pagamento || 'vencimento_titulos';
+      document.getElementById('f_prazo').value = a.prazo_pagamento_dias || 30;
+      document.getElementById('f_pct_vendas').value = a.percentual_vendas_pagamento || 0;
+      document.getElementById('f_ativo').value = a.ativo ? 'true' : 'false';
+      document.getElementById('f_obs').value = a.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.excluir = async function(id) {
+      if (!confirm('Excluir esta alavanca?')) return;
+      var r = await sb.from('cash_alavancas').delete().eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Alavanca excluida.', 'success');
+      carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var nome = document.getElementById('f_nome').value.trim();
+      if (!nome) { showMsg('Nome e obrigatorio.', 'error'); return; }
+      var payload = {
+        nome: nome,
+        tipo: document.getElementById('f_tipo').value,
+        taxa_pct_mensal: parseFloat(document.getElementById('f_taxa_mensal').value) || 0,
+        taxa_fixa_pct: parseFloat(document.getElementById('f_taxa_fixa').value) || 0,
+        limite_disponivel: parseFloat(document.getElementById('f_limite').value) || 0,
+        prazo_liberacao_dias: parseInt(document.getElementById('f_lib').value) || 0,
+        forma_pagamento: document.getElementById('f_forma').value,
+        prazo_pagamento_dias: parseInt(document.getElementById('f_prazo').value) || 30,
+        percentual_vendas_pagamento: parseFloat(document.getElementById('f_pct_vendas').value) || 0,
+        ativo: document.getElementById('f_ativo').value === 'true',
+        observacao: document.getElementById('f_obs').value.trim() || null,
+        atualizado_em: new Date().toISOString()
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_alavancas').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_alavancas').insert(payload);
+      if (r.error) { showMsg('Erro ao salvar: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Alavanca atualizada.' : 'Alavanca criada.', 'success');
+      limparForm();
+      carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+    carregar();
+  </script>
+</body>
+</html>
