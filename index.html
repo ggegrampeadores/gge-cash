@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:20px 24px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    h1 { font-size:22px; font-weight:600; }
+    .meta { color:#8b949e; font-size:12px; }
+    button.refresh { background:#238636; color:#fff; border:none; padding:8px 16px;
+                     border-radius:5px; cursor:pointer; font-size:13px; font-weight:500; }
+    button.refresh:hover { background:#2ea043; }
+    button.refresh:disabled { opacity:.5; cursor:wait; }
+
+    .kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:24px; }
+    .kpi { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px; }
+    .kpi .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .kpi .valor { font-size:20px; font-weight:700; margin-top:4px; font-family:'SF Mono',Menlo,monospace; }
+    .kpi .sub { color:#8b949e; font-size:11px; margin-top:2px; }
+    .kpi.saldo-init .valor { color:#58a6ff; }
+    .kpi.inercia .valor { color:#f85149; }
+    .kpi.decisoes .valor { color:#d29922; }
+    .kpi.sugestao .valor { color:#3fb950; }
+    .kpi .badge { display:inline-block; padding:1px 7px; border-radius:9px; font-size:10px;
+                  font-weight:600; margin-left:6px; vertical-align:middle; }
+    .kpi.inercia .badge { background:#3a1e1f; color:#f85149; }
+    .kpi.decisoes .badge { background:#332b09; color:#d29922; }
+    .kpi.sugestao .badge { background:#0d3920; color:#3fb950; }
+
+    .cenarios { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+    .cenario { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:0; overflow:hidden; }
+    .cenario h2 { font-size:13px; font-weight:600; padding:14px 18px; border-bottom:1px solid #30363d;
+                  text-transform:uppercase; letter-spacing:.5px; display:flex; justify-content:space-between; align-items:center; }
+    .cenario.inercia h2 { color:#f85149; background:#1a0d0e; }
+    .cenario.decisoes h2 { color:#d29922; background:#1a1408; }
+    .cenario.sugestao h2 { color:#3fb950; background:#0c1a10; }
+    .cenario h2 .saldo-final { font-family:'SF Mono',Menlo,monospace; font-size:13px; font-weight:700; }
+
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { padding:8px 10px; border-bottom:1px solid #21262d; text-align:right; }
+    th { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.3px; font-weight:600;
+         background:#0d1117; }
+    th.semana, td.semana { text-align:left; }
+    .week-num { color:#58a6ff; font-weight:700; font-family:'SF Mono',Menlo,monospace; }
+    .week-periodo { color:#8b949e; font-size:10px; margin-left:6px; }
+    .entradas { color:#3fb950; font-family:'SF Mono',Menlo,monospace; }
+    .saidas { color:#f85149; font-family:'SF Mono',Menlo,monospace; }
+    .saldo-pos { color:#3fb950; font-family:'SF Mono',Menlo,monospace; font-weight:600; }
+    .saldo-neg { color:#f85149; font-family:'SF Mono',Menlo,monospace; font-weight:600; }
+    .acum-pos { color:#3fb950; font-family:'SF Mono',Menlo,monospace; font-weight:700; }
+    .acum-neg { color:#f85149; font-family:'SF Mono',Menlo,monospace; font-weight:700; }
+
+    tr.semana-row { cursor:pointer; }
+    tr.semana-row:hover td { background:#1f2630; }
+    tr.semana-row.atual td { border-left:2px solid #58a6ff; }
+    tr.semana-row.atual td.semana { font-weight:700; }
+    tr.detail { display:none; }
+    tr.detail.show { display:table-row; }
+    tr.detail td { background:#0d1117; padding:14px 16px; text-align:left; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .detail-section h4 { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.4px;
+                         margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid #30363d; }
+    .detail-row { display:flex; justify-content:space-between; font-size:11px; padding:3px 0; }
+    .detail-row .lbl { color:#c9d1d9; }
+    .detail-row .val { font-family:'SF Mono',Menlo,monospace; }
+    .detail-row .val.ent { color:#3fb950; }
+    .detail-row .val.sai { color:#f85149; }
+    .detail-row .val.zero { color:#6e7681; }
+    .detail-row.total { border-top:1px solid #30363d; margin-top:6px; padding-top:6px;
+                        font-weight:600; }
+
+    .contagens { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+    .contagem-chip { background:#161b22; border:1px solid #30363d; border-radius:5px;
+                     padding:6px 10px; font-size:11px; color:#8b949e; }
+    .contagem-chip strong { color:#58a6ff; }
+    .loading { text-align:center; padding:60px 20px; color:#8b949e; font-size:14px; }
+    .alerta { background:#3a1e1f; border:1px solid #6e2426; color:#f85149; padding:10px 14px;
+              border-radius:5px; margin-bottom:14px; font-size:13px; }
+    .alerta.warn { background:#332b09; border-color:#5c4d12; color:#d29922; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <div class="topbar">
+      <div>
+        <h1>Fluxo de Caixa — 8 semanas</h1>
+        <div class="meta" id="meta">carregando...</div>
+      </div>
+      <button class="refresh" id="btn-refresh">↻ Atualizar</button>
+    </div>
+
+    <div id="alertas"></div>
+
+    <div class="kpis" id="kpis">
+      <div class="kpi saldo-init">
+        <div class="label">Saldo inicial</div>
+        <div class="valor" id="kpi-saldo">—</div>
+        <div class="sub" id="kpi-saldo-data">—</div>
+      </div>
+      <div class="kpi inercia">
+        <div class="label">Cenário Inércia <span class="badge">se não fizer nada</span></div>
+        <div class="valor" id="kpi-inercia">—</div>
+        <div class="sub" id="kpi-inercia-custo">—</div>
+      </div>
+      <div class="kpi decisoes">
+        <div class="label">Cenário Decisões <span class="badge">suas escolhas</span></div>
+        <div class="valor" id="kpi-decisoes">—</div>
+        <div class="sub" id="kpi-decisoes-custo">—</div>
+      </div>
+      <div class="kpi sugestao">
+        <div class="label">Cenário Sugestão <span class="badge">ótimo</span></div>
+        <div class="valor" id="kpi-sugestao">—</div>
+        <div class="sub" id="kpi-sugestao-custo">—</div>
+      </div>
+    </div>
+
+    <div class="contagens" id="contagens"></div>
+
+    <div class="cenarios" id="cenarios">
+      <div class="loading">Carregando forecast...</div>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var FORECAST_URL = window.GGE_SUPABASE_URL + '/functions/v1/cash-forecast';
+
+    function periodoCurto(ini, fim) {
+      var a = new Date(ini + 'T00:00:00');
+      var b = new Date(fim + 'T00:00:00');
+      var p1 = ('0'+a.getDate()).slice(-2) + '/' + ('0'+(a.getMonth()+1)).slice(-2);
+      var p2 = ('0'+b.getDate()).slice(-2) + '/' + ('0'+(b.getMonth()+1)).slice(-2);
+      return p1 + '–' + p2;
+    }
+
+    function classeSaldo(v) { return Number(v) >= 0 ? 'saldo-pos' : 'saldo-neg'; }
+    function classeAcum(v)  { return Number(v) >= 0 ? 'acum-pos' : 'acum-neg'; }
+    function valClass(v) { return Number(v) === 0 ? 'zero' : (Number(v) >= 0 ? 'ent' : 'sai'); }
+
+    function renderDetalhe(w) {
+      var e = w.entradas, s = w.saidas;
+      var html = '<div class="detail-grid">';
+      html += '<div class="detail-section"><h4>Entradas</h4>';
+      [
+        ['ML vendido (real D+10)', e.ml_real],
+        ['ML projeção média', e.ml_projetada],
+        ['B2B (vendedores)', e.b2b],
+        ['Shopee', e.shopee],
+        ['Bling a receber', e.bling_receber],
+        ['Extras (aportes etc)', e.extras],
+        ['Captação alavancas', e.decisoes_captacao]
+      ].forEach(function(r) {
+        html += '<div class="detail-row"><span class="lbl">'+r[0]+'</span>'
+             +  '<span class="val '+valClass(r[1])+'">'+fmtBRL(r[1])+'</span></div>';
+      });
+      html += '<div class="detail-row total"><span class="lbl">Total entradas</span>'
+           +  '<span class="val ent">'+fmtBRL(e.total)+'</span></div></div>';
+
+      html += '<div class="detail-section"><h4>Saídas</h4>';
+      [
+        ['Bling a pagar', s.bling_pagar],
+        ['Pendências em atraso', s.pendencias],
+        ['Extras (despesas)', s.extras],
+        ['Investimentos', s.investimentos],
+        ['Pagamento de alavancas', s.decisoes_pagamento]
+      ].forEach(function(r) {
+        html += '<div class="detail-row"><span class="lbl">'+r[0]+'</span>'
+             +  '<span class="val '+(Number(r[1])>0?'sai':'zero')+'">'+fmtBRL(r[1])+'</span></div>';
+      });
+      html += '<div class="detail-row total"><span class="lbl">Total saídas</span>'
+           +  '<span class="val sai">'+fmtBRL(s.total)+'</span></div>';
+
+      if (Number(w.custo_capital_semana) > 0) {
+        html += '<div class="detail-row" style="margin-top:10px; color:#d29922;"><span class="lbl">Custo de capital semana</span>'
+             +  '<span class="val sai">'+fmtBRL(w.custo_capital_semana)+'</span></div>';
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    function renderCenario(nome, classeNome, dados, semanaAtualIdx) {
+      var saldoFinal = dados.saldo_final;
+      var custoCap = dados.custo_capital_total;
+      var html = '<div class="cenario '+classeNome+'">'
+               + '<h2>'+nome+'<span class="saldo-final '+classeAcum(saldoFinal)+'">'+fmtBRL(saldoFinal)+'</span></h2>'
+               + '<table><thead><tr>'
+               + '<th class="semana">Semana</th><th>Entradas</th><th>Saídas</th><th>Saldo sem.</th><th>Acum.</th>'
+               + '</tr></thead><tbody>';
+      dados.semanas.forEach(function(w, i) {
+        var atualClass = (i === 0) ? ' atual' : '';
+        html += '<tr class="semana-row'+atualClass+'" data-cen="'+classeNome+'" data-idx="'+i+'">'
+             +  '<td class="semana"><span class="week-num">S'+w.semana+'</span>'
+             +     '<span class="week-periodo">'+periodoCurto(w.inicio, w.fim)+'</span></td>'
+             +  '<td class="entradas">'+fmtBRL(w.entradas.total)+'</td>'
+             +  '<td class="saidas">'+fmtBRL(w.saidas.total)+'</td>'
+             +  '<td class="'+classeSaldo(w.saldo_semana)+'">'+fmtBRL(w.saldo_semana)+'</td>'
+             +  '<td class="'+classeAcum(w.saldo_acumulado)+'">'+fmtBRL(w.saldo_acumulado)+'</td>'
+             +  '</tr>'
+             +  '<tr class="detail" data-cen="'+classeNome+'" data-detail="'+i+'"><td colspan="5">'
+             +     renderDetalhe(w) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      return html;
+    }
+
+    function ligarToggle() {
+      document.querySelectorAll('.semana-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+          var cen = row.dataset.cen;
+          var idx = row.dataset.idx;
+          var det = document.querySelector('tr.detail[data-cen="'+cen+'"][data-detail="'+idx+'"]');
+          if (det) det.classList.toggle('show');
+        });
+      });
+    }
+
+    async function carregar() {
+      var btn = document.getElementById('btn-refresh');
+      btn.disabled = true; btn.textContent = '↻ Carregando...';
+      document.getElementById('cenarios').innerHTML = '<div class="loading">Calculando forecast...</div>';
+
+      try {
+        var r = await fetch(FORECAST_URL, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + window.GGE_SUPABASE_KEY, 'Content-Type': 'application/json' }
+        });
+        var d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Forecast falhou');
+
+        document.getElementById('meta').textContent =
+          'Gerado em ' + new Date(d.gerado_em).toLocaleString('pt-BR') +
+          ' • Média diária ML últimos 14d: ' + fmtBRL(d.media_diaria_ml);
+
+        document.getElementById('kpi-saldo').textContent = fmtBRL(d.saldo_inicial);
+        document.getElementById('kpi-saldo-data').textContent =
+          d.data_saldo_inicial ? 'em ' + fmtDateBR(d.data_saldo_inicial) : 'Lance um saldo em /saldos';
+
+        ['inercia', 'decisoes', 'sugestao'].forEach(function(c) {
+          var sc = d.cenarios[c];
+          document.getElementById('kpi-' + c).textContent = fmtBRL(sc.saldo_final);
+          document.getElementById('kpi-' + c + '-custo').textContent =
+            'Custo de capital total: ' + fmtBRL(sc.custo_capital_total);
+        });
+
+        var alertasEl = document.getElementById('alertas');
+        var alertasHtml = '';
+        if (!d.data_saldo_inicial) {
+          alertasHtml += '<div class="alerta warn">⚠ Sem saldo bancário lançado — o forecast parte de zero. Vá em <strong>/saldos</strong> e lance o saldo do dia.</div>';
+        }
+        if (d.cenarios.inercia.saldo_final < 0) {
+          alertasHtml += '<div class="alerta">⚠ Cenário Inércia termina em <strong>'+fmtBRL(d.cenarios.inercia.saldo_final)+'</strong>. Use Alavancas / Decisões para zerar o gap.</div>';
+        }
+        alertasEl.innerHTML = alertasHtml;
+
+        var c = d.contagens;
+        document.getElementById('contagens').innerHTML =
+          '<div class="contagem-chip">Vendas ML 90d: <strong>'+c.ml_vendas_lookback+'</strong></div>'
+        + '<div class="contagem-chip">Bling a pagar: <strong>'+c.bling_pagar_pendente+'</strong></div>'
+        + '<div class="contagem-chip">Bling vencidos: <strong>'+c.bling_pagar_vencidos+'</strong></div>'
+        + '<div class="contagem-chip">Bling a receber: <strong>'+c.bling_receber_pendente+'</strong></div>'
+        + '<div class="contagem-chip">Metas lançadas: <strong>'+c.metas+'</strong></div>'
+        + '<div class="contagem-chip">Pendências: <strong>'+c.pendencias+'</strong></div>'
+        + '<div class="contagem-chip">Decisões ativas: <strong>'+c.decisoes_ativas+'</strong></div>'
+        + '<div class="contagem-chip">Overrides: <strong>'+c.overrides+'</strong></div>'
+        + '<div class="contagem-chip">Extras: <strong>'+c.extras+'</strong></div>'
+        + '<div class="contagem-chip">Investimentos: <strong>'+c.investimentos+'</strong></div>';
+
+        document.getElementById('cenarios').innerHTML =
+            renderCenario('Inércia', 'inercia', d.cenarios.inercia, 0)
+          + renderCenario('Decisões', 'decisoes', d.cenarios.decisoes, 0)
+          + renderCenario('Sugestão', 'sugestao', d.cenarios.sugestao, 0);
+        ligarToggle();
+      } catch (e) {
+        document.getElementById('cenarios').innerHTML =
+          '<div class="alerta">Erro: ' + (e.message || e) + '</div>';
+      } finally {
+        btn.disabled = false; btn.textContent = '↻ Atualizar';
+      }
+    }
+
+    document.getElementById('btn-refresh').onclick = carregar;
+    carregar();
+  </script>
+</body>
+</html>
