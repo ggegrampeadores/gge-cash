@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saldos - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .saldo-atual { display:flex; align-items:baseline; gap:14px; }
+    .saldo-atual .label { color:#8b949e; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+    .saldo-atual .valor { font-size:32px; font-weight:700; }
+    .saldo-atual .valor.positivo { color:#3fb950; }
+    .saldo-atual .valor.negativo { color:#f85149; }
+    .saldo-atual .data { color:#8b949e; font-size:13px; }
+    .form-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+    .form-grid .full { grid-column:1 / -1; }
+    .form-grid label { display:block; font-size:11px; color:#8b949e;
+                       margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .form-grid input, .form-grid textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .form-grid input:focus, .form-grid textarea:focus { outline:none; border-color:#58a6ff; }
+    .form-grid textarea { resize:vertical; min-height:60px; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d;
+             font-size:13px; }
+    th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+         font-weight:600; }
+    tr:hover td { background:#1f2630; }
+    .valor-cell { font-family: 'SF Mono', Menlo, monospace; }
+    .valor-cell.neg { color:#f85149; }
+    .valor-cell.pos { color:#3fb950; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px;
+           font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:4px 10px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Saldo Bancario</h1>
+    <p class="subtitle">Lancamento manual do saldo do dia. O mais recente e usado como ponto de partida do forecast.</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="card">
+      <h2>Saldo mais recente</h2>
+      <div class="saldo-atual">
+        <span class="label">Em</span>
+        <span class="data" id="saldo-data">—</span>
+        <span class="valor" id="saldo-valor">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="form-title">+ Novo lancamento de saldo</h2>
+      <div class="form-grid">
+        <div>
+          <label>Data</label>
+          <input id="f_data" type="date">
+        </div>
+        <div>
+          <label>Banco / Conta</label>
+          <input id="f_banco" value="consolidado" placeholder="consolidado, bradesco, itau...">
+        </div>
+        <div>
+          <label>Saldo (R$)</label>
+          <input id="f_saldo" type="number" step="0.01" placeholder="ex: 125000.00">
+        </div>
+        <div></div>
+        <div class="full">
+          <label>Observacao</label>
+          <textarea id="f_obs" placeholder="opcional"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btn-salvar">Salvar</button>
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edicao</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Historico</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:120px;">Data</th>
+            <th>Banco</th>
+            <th style="width:160px; text-align:right;">Saldo</th>
+            <th>Observacao</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_saldos_bancarios').select('*').order('data', { ascending: false }).order('criado_em', { ascending: false });
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var dados = r.data || [];
+
+      var maisRecente = dados[0];
+      if (maisRecente) {
+        document.getElementById('saldo-data').textContent = fmtDateBR(maisRecente.data);
+        var el = document.getElementById('saldo-valor');
+        el.textContent = fmtBRL(maisRecente.saldo);
+        el.className = 'valor ' + (Number(maisRecente.saldo) >= 0 ? 'positivo' : 'negativo');
+      }
+
+      var html = '';
+      dados.forEach(function(s) {
+        var classe = Number(s.saldo) >= 0 ? 'pos' : 'neg';
+        html += '<tr>'
+             +  '<td>' + fmtDateBR(s.data) + '</td>'
+             +  '<td>' + (s.banco || 'consolidado') + '</td>'
+             +  '<td class="valor-cell ' + classe + '" style="text-align:right;">' + fmtBRL(s.saldo) + '</td>'
+             +  '<td style="color:#8b949e;">' + (s.observacao || '') + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + s.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="excluir(\'' + s.id + '\')">Excluir</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="5" style="text-align:center; color:#8b949e; padding:30px;">Nenhum saldo lancado ainda.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+    }
+
+    function hojeISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Novo lancamento de saldo';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_data').value = hojeISO();
+      document.getElementById('f_banco').value = 'consolidado';
+      document.getElementById('f_saldo').value = '';
+      document.getElementById('f_obs').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_saldos_bancarios').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var s = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando saldo de ' + fmtDateBR(s.data);
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_data').value = s.data;
+      document.getElementById('f_banco').value = s.banco || 'consolidado';
+      document.getElementById('f_saldo').value = s.saldo;
+      document.getElementById('f_obs').value = s.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.excluir = async function(id) {
+      if (!confirm('Excluir este lancamento?')) return;
+      var r = await sb.from('cash_saldos_bancarios').delete().eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Lancamento excluido.', 'success');
+      carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var data = document.getElementById('f_data').value;
+      var saldo = document.getElementById('f_saldo').value;
+      if (!data) { showMsg('Data e obrigatoria.', 'error'); return; }
+      if (saldo === '') { showMsg('Saldo e obrigatorio.', 'error'); return; }
+      var payload = {
+        data: data,
+        banco: document.getElementById('f_banco').value.trim() || 'consolidado',
+        saldo: parseFloat(saldo),
+        observacao: document.getElementById('f_obs').value.trim() || null
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_saldos_bancarios').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_saldos_bancarios').insert(payload);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Saldo atualizado.' : 'Saldo lancado.', 'success');
+      limparForm();
+      carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+
+    document.getElementById('f_data').value = hojeISO();
+    carregar();
+  </script>
+</body>
+</html>
