@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pendencias em Atraso - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .form-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+    .form-grid .full { grid-column:1 / -1; }
+    .form-grid label { display:block; font-size:11px; color:#8b949e;
+                       margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .form-grid input, .form-grid textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .form-grid input:focus, .form-grid textarea:focus { outline:none; border-color:#58a6ff; }
+    .form-grid textarea { resize:vertical; min-height:60px; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d; font-size:13px; }
+    th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; font-weight:600; }
+    tr:hover td { background:#1f2630; }
+    .valor-cell { font-family:'SF Mono',Menlo,monospace; text-align:right; }
+    .multa-cell { font-family:'SF Mono',Menlo,monospace; color:#d29922; text-align:right; }
+    .total-cell { font-family:'SF Mono',Menlo,monospace; color:#f85149; font-weight:700; text-align:right; }
+    .dias-cell { text-align:center; }
+    .dias-cell .pill { display:inline-block; padding:2px 8px; border-radius:10px;
+                       font-size:11px; font-weight:600; }
+    .dias-cell .leve { background:#332b09; color:#d29922; }
+    .dias-cell .medio { background:#3a2616; color:#fa8c16; }
+    .dias-cell .grave { background:#3a1e1f; color:#f85149; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px; font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:4px 10px; font-size:12px; }
+    .totalizadores { display:flex; gap:24px; margin-bottom:18px; }
+    .total-card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+                  padding:14px 18px; flex:1; }
+    .total-card .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .total-card .valor { font-size:22px; font-weight:700; margin-top:4px; font-family:'SF Mono',Menlo,monospace; color:#f85149; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Pendencias em Atraso</h1>
+    <p class="subtitle">Pagamentos ja vencidos sem quitacao. Calculo automatico de dias de atraso. Multa estimada e informativa para o forecast.</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="totalizadores">
+      <div class="total-card">
+        <div class="label">Pendencias ativas</div>
+        <div class="valor" id="t-count">0</div>
+      </div>
+      <div class="total-card">
+        <div class="label">Total em atraso (R$)</div>
+        <div class="valor" id="t-valor">R$ 0,00</div>
+      </div>
+      <div class="total-card">
+        <div class="label">Multa estimada</div>
+        <div class="valor" id="t-multa">R$ 0,00</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="form-title">+ Nova pendencia</h2>
+      <div class="form-grid">
+        <div>
+          <label>Descricao</label>
+          <input id="f_desc" placeholder="ex: NF 12345 fornecedor X">
+        </div>
+        <div>
+          <label>Vencimento original</label>
+          <input id="f_venc" type="date">
+        </div>
+        <div>
+          <label>Valor (R$)</label>
+          <input id="f_valor" type="number" step="0.01" min="0">
+        </div>
+        <div>
+          <label>Multa estimada (R$)</label>
+          <input id="f_multa" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div>
+          <label>ID Bling (opcional)</label>
+          <input id="f_bling" placeholder="se vier do Bling">
+        </div>
+        <div class="full">
+          <label>Observacao</label>
+          <textarea id="f_obs"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btn-salvar">Salvar</button>
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edicao</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Pendencias cadastradas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Descricao</th>
+            <th style="width:120px;">Vencto</th>
+            <th style="width:90px;">Dias</th>
+            <th style="width:140px; text-align:right;">Valor</th>
+            <th style="width:120px; text-align:right;">Multa</th>
+            <th style="width:140px; text-align:right;">Total</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    function hojeISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function diasAtraso(vencISO) {
+      var v = new Date(vencISO + 'T00:00:00');
+      var h = new Date(); h.setHours(0,0,0,0);
+      return Math.max(0, Math.floor((h - v) / 86400000));
+    }
+
+    function diasPill(dias) {
+      if (dias <= 7) return '<span class="pill leve">' + dias + 'd</span>';
+      if (dias <= 30) return '<span class="pill medio">' + dias + 'd</span>';
+      return '<span class="pill grave">' + dias + 'd</span>';
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_pendencias_atraso').select('*').eq('ativo', true).order('data_vencimento_original');
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var dados = r.data || [];
+
+      var totValor = 0, totMulta = 0;
+      var html = '';
+      dados.forEach(function(p) {
+        var dias = diasAtraso(p.data_vencimento_original);
+        totValor += Number(p.valor || 0);
+        totMulta += Number(p.multa_estimada || 0);
+        var total = Number(p.valor || 0) + Number(p.multa_estimada || 0);
+        html += '<tr>'
+             +  '<td>' + (p.descricao || '') + '</td>'
+             +  '<td>' + fmtDateBR(p.data_vencimento_original) + '</td>'
+             +  '<td class="dias-cell">' + diasPill(dias) + '</td>'
+             +  '<td class="valor-cell">' + fmtBRL(p.valor) + '</td>'
+             +  '<td class="multa-cell">' + fmtBRL(p.multa_estimada || 0) + '</td>'
+             +  '<td class="total-cell">' + fmtBRL(total) + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + p.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="quitar(\'' + p.id + '\')">Quitar</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="7" style="text-align:center; color:#8b949e; padding:30px;">Nenhuma pendencia ativa.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+      document.getElementById('t-count').textContent = dados.length;
+      document.getElementById('t-valor').textContent = fmtBRL(totValor);
+      document.getElementById('t-multa').textContent = fmtBRL(totMulta);
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Nova pendencia';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_desc').value = '';
+      document.getElementById('f_venc').value = hojeISO();
+      document.getElementById('f_valor').value = '';
+      document.getElementById('f_multa').value = '0';
+      document.getElementById('f_bling').value = '';
+      document.getElementById('f_obs').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_pendencias_atraso').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var p = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando: ' + (p.descricao || '');
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_desc').value = p.descricao || '';
+      document.getElementById('f_venc').value = p.data_vencimento_original;
+      document.getElementById('f_valor').value = p.valor;
+      document.getElementById('f_multa').value = p.multa_estimada || 0;
+      document.getElementById('f_bling').value = p.bling_conta_id || '';
+      document.getElementById('f_obs').value = p.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.quitar = async function(id) {
+      if (!confirm('Marcar pendencia como quitada/removida?')) return;
+      var r = await sb.from('cash_pendencias_atraso').update({ ativo: false }).eq('id', id);
+      if (
