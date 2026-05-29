@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pagamentos - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .summary { display:flex; gap:14px; margin-bottom:18px; }
+    .summary-item { background:#161b22; border:1px solid #30363d; border-radius:8px;
+                    padding:14px 18px; flex:1; }
+    .summary-item .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .summary-item .valor { font-size:20px; font-weight:700; margin-top:4px; font-family:'SF Mono',Menlo,monospace; }
+    .summary-item.tot .valor { color:#f85149; }
+    .summary-item.mov .valor { color:#d29922; }
+    .summary-item.cap .valor { color:#58a6ff; }
+    .filters { display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
+    .filters label { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; }
+    .filters select, .filters input {
+      padding:6px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px;
+    }
+    .filters .chip { padding:6px 10px; background:#1c2733; border:1px solid #30363d;
+                     border-radius:5px; font-size:12px; color:#58a6ff; cursor:pointer; }
+    .filters .chip.active { background:#1f3a5f; color:#fff; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    .btn-move { background:#1f3a5f; color:#fff; padding:4px 10px; font-size:12px; }
+    .btn-move:hover { background:#316cb3; }
+    .btn-revert { background:#5c4d12; color:#fff; padding:4px 10px; font-size:12px; }
+    .btn-revert:hover { background:#7d6817; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px 10px; text-align:left; border-bottom:1px solid #30363d; font-size:12px;
+             vertical-align: top; }
+    th { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.4px; font-weight:600;
+         background:#0d1117; position:sticky; top:0; }
+    tr:hover td { background:#1f2630; }
+    .venc { font-family:'SF Mono',Menlo,monospace; }
+    .venc.original { color:#c9d1d9; }
+    .venc.movido { color:#d29922; font-weight:600; }
+    .venc.vencido { color:#f85149; font-weight:600; }
+    .valor-cell { font-family:'SF Mono',Menlo,monospace; text-align:right; color:#f85149; font-weight:600; }
+    .fornecedor { color:#c9d1d9; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .historico { color:#8b949e; font-size:11px; margin-top:2px;
+                 max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .categoria { font-size:11px; color:#58a6ff; }
+    .categoria.semcat { color:#6e7681; font-style:italic; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px; font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+
+    /* Modal */
+    .modal-bg { position:fixed; top:0; left:0; width:100vw; height:100vh;
+                background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal-bg.show { display:flex; }
+    .modal { background:#161b22; border:1px solid #30363d; border-radius:8px;
+             padding:24px; width:520px; max-width:90vw; }
+    .modal h3 { font-size:16px; margin-bottom:14px; color:#e6edf3; }
+    .modal .info { background:#0d1117; padding:10px 12px; border-radius:5px; margin-bottom:14px; font-size:12px; }
+    .modal .info-row { display:flex; justify-content:space-between; padding:3px 0; }
+    .modal .info-row .lbl { color:#8b949e; }
+    .modal .info-row .val { font-family:'SF Mono',Menlo,monospace; color:#c9d1d9; }
+    .modal .form-row { margin-bottom:12px; }
+    .modal .form-row label { display:block; font-size:11px; color:#8b949e;
+                             margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .modal .form-row input, .modal .form-row select, .modal .form-row textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .modal .form-row textarea { resize:vertical; min-height:50px; }
+    .modal .calc-result { background:#1a2233; border-radius:5px; padding:10px 12px; margin-bottom:14px; }
+    .modal .calc-result .label { font-size:10px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; }
+    .modal .calc-result .valor { font-size:18px; font-weight:700; font-family:'SF Mono',Menlo,monospace; margin-top:2px; color:#d29922; }
+    .modal .calc-result .hint { font-size:11px; color:#8b949e; margin-top:4px; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+    .badge-ov { display:inline-block; padding:1px 6px; border-radius:9px;
+                background:#332b09; color:#d29922; font-size:9px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Pagamentos (Bling)</h1>
+    <p class="subtitle">Lista de títulos a pagar abertos. Use "Mover" para reagendar o pagamento — gera um override que reflete no Cenário Decisões (sem alterar o Bling).</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="summary">
+      <div class="summary-item tot">
+        <div class="label">Total a pagar (selecionado)</div>
+        <div class="valor" id="s-total">R$ 0</div>
+      </div>
+      <div class="summary-item mov">
+        <div class="label">Movidos / total</div>
+        <div class="valor" id="s-mov">0/0</div>
+      </div>
+      <div class="summary-item cap">
+        <div class="label">Custo total dos atrasos</div>
+        <div class="valor" id="s-cap">R$ 0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Filtros</h2>
+      <div class="filters">
+        <span class="chip" data-rng="2">próximas 2 semanas</span>
+        <span class="chip active" data-rng="4">próximas 4 semanas</span>
+        <span class="chip" data-rng="8">próximas 8 semanas</span>
+        <span class="chip" data-rng="12">próximas 12 semanas</span>
+        <span class="chip" data-rng="vencidos">só vencidos</span>
+        <span class="chip" data-rng="movidos">só movidos</span>
+        <span class="chip" data-rng="tudo">tudo</span>
+        <label style="margin-left:14px;">Buscar:</label>
+        <input id="f_busca" placeholder="fornecedor ou histórico" style="width:240px;">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Títulos a pagar (<span id="qt-titulos">0</span>)</h2>
+      <div style="max-height:65vh; overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:115px;">Vencimento</th>
+              <th>Fornecedor / Histórico</th>
+              <th style="width:160px;">Categoria</th>
+              <th style="width:120px; text-align:right;">Valor</th>
+              <th style="width:160px;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Mover -->
+  <div class="modal-bg" id="modal-mover">
+    <div class="modal">
+      <h3>Mover pagamento</h3>
+      <div class="info">
+        <div class="info-row"><span class="lbl">Fornecedor:</span> <span class="val" id="mv-fornecedor">—</span></div>
+        <div class="info-row"><span class="lbl">Histórico:</span> <span class="val" id="mv-historico">—</span></div>
+        <div class="info-row"><span class="lbl">Valor:</span> <span class="val" id="mv-valor">—</span></div>
+        <div class="info-row"><span class="lbl">Vencimento original:</span> <span class="val" id="mv-original">—</span></div>
+        <div class="info-row"><span class="lbl">Categoria Bling:</span> <span class="val" id="mv-categoria">—</span></div>
+      </div>
+
+      <div class="form-row">
+        <label>Novo vencimento</label>
+        <input id="mv-nova-data" type="date">
+      </div>
+
+      <div class="calc-result">
+        <div class="label">Dias de atraso</div>
+        <div class="valor" id="mv-dias">—</div>
+        <div class="hint" id="mv-cat-info">Custo do atraso depende da categoria cadastrada em /categorias.</div>
+        <div class="label" style="margin-top:8px;">Custo estimado do atraso</div>
+        <div class="valor" id="mv-custo">R$ 0</div>
+      </div>
+
+      <div class="form-row">
+        <label>Motivo</label>
+        <select id="mv-motivo">
+          <option value="atraso_voluntario">Atraso voluntário</option>
+          <option value="antecipacao">Antecipação</option>
+          <option value="agrupamento">Agrupamento de pagamentos</option>
+          <option value="feriado_dia_util">Feriado / dia útil</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>Observação</label>
+        <textarea id="mv-obs" placeholder="opcional"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" id="mv-cancelar">Cancelar</button>
+        <button class="btn-primary" id="mv-salvar">Salvar movimentação</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var rangeWeeks = 4; // default
+    var rangeMode = 'futuro';
+    var pagar = [];
+    var overrides = {}; // bling_id -> override
+    var categoriasCache = []; // para estimar custo
+    var movendo = null;
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 4000);
+    }
+
+    function hojeISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function isoDate(d) {
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    function vencimentoEfetivo(item) {
+      var ov = overrides[item.bling_id];
+      return ov ? ov.data_nova : item.vencimento;
+    }
+
+    function diasEntre(d1ISO, d2ISO) {
+      var a = new Date(d1ISO + 'T00:00:00');
+      var b = new Date(d2ISO + 'T00:00:00');
+      return Math.round((b - a) / 86400000);
+    }
+
+    function matchCategoria(catBling) {
+      if (!catBling) return null;
+      var lower = String(catBling).toLowerCase().trim();
+      for (var i = 0; i < categoriasCache.length; i++) {
+        var c = categoriasCache[i];
+        if (!c.nome_bling) continue;
+        var cnb = String(c.nome_bling).toLowerCase().trim();
+        if (lower === cnb || lower.indexOf(cnb) >= 0 || cnb.indexOf(lower) >= 0) return c;
+      }
+      return null;
+    }
+
+    async function carregarBase() {
+      var rCat = await sb.from('cash_categorias').select('*').eq('ativo', true);
+      categoriasCache = rCat.data || [];
+
+      // Carregar pagar (paginado para garantir)
+      pagar = [];
+      var from = 0;
+      while (true) {
+        var r = await sb.from('cash_bling_pagar_cache').select('*').eq('status', '1').range(from, from + 999);
+        if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+        var d = r.data || [];
+        pagar = pagar.concat(d);
+        if (d.length < 1000) break;
+        from += 1000;
+        if (from > 50000) break;
+      }
+      pagar.sort(function(a, b) { return (a.vencimento || '').localeCompare(b.vencimento || ''); });
+
+      var rOv = await sb.from('cash_overrides_pagamento').select('*');
+      overrides = {};
+      (rOv.data || []).forEach(function(o) { overrides[o.bling_conta_id] = o; });
+    }
+
+    function renderTabela() {
+      var hoje = hojeISO();
+      var dataLimite = '';
+      if (rangeMode === 'futuro') {
+        var d = new Date(); d.setDate(d.getDate() + rangeWeeks * 7);
+        dataLimite = isoDate(d);
+      }
+      var busca = (document.getElementById('f_busca').value || '').toLowerCase().trim();
+
+      var filtrados = pagar.filter(function(item) {
+        var venc = vencimentoEfetivo(item);
+        if (rangeMode === 'futuro') {
+          if (venc > dataLimite) return false;
+        } else if (rangeMode === 'vencidos') {
+          if (venc >= hoje) return false;
+        } else if (rangeMode === 'movidos') {
+          if (!overrides[item.bling_id]) return false;
+        }
+        if (busca) {
+          var hay = ((item.fornecedor || '') + ' ' + (item.historico || '') + ' ' + (item.categoria_bling || '')).toLowerCase();
+          if (hay.indexOf(busca) < 0) return false;
+        }
+        return true;
+      });
+
+      var html = '';
+      var totVal = 0, totMov = 0, totCap = 0;
+      filtrados.forEach(function(item) {
+        var ov = overrides[item.bling_id];
+        var venc = vencimentoEfetivo(item);
+        var classVenc = 'original';
+        if (ov) classVenc = 'movido';
+        else if (venc < hoje) classVenc = 'vencido';
+        var cat = matchCategoria(item.categoria_bling);
+        var catHtml = item.categoria_bling
+          ? '<span class="categoria">' + item.categoria_bling + '</span>'
+            + (cat ? '<br><span class="badge-ov">PRI ' + cat.prioridade + ' / ' + cat.dias_max_atraso + 'd max</span>' : '')
+          : '<span class="categoria semcat">— sem categoria —</span>';
+        var ovBadge = ov ? ' <span class="badge-ov">MOVIDO</span>' : '';
+
+        totVal += Number(item.valor || 0);
+        if (ov) {
+          totMov++;
+          totCap += Number(ov.custo_atraso || 0);
+        }
+
+        var diasInfo = '';
+        if (ov) {
+          var dias = diasEntre(ov.data_original, ov.data_nova);
+          diasInfo = ' <span style="color:#8b949e; font-size:10px;">(+' + dias + 'd, era ' + fmtDateBR(ov.data_original) + ')</span>';
+        }
+        html += '<tr>'
+             +  '<td><span class="venc ' + classVenc + '">' + fmtDateBR(venc) + '</span>' + ovBadge + diasInfo + '</td>'
+             +  '<td><div class="fornecedor">' + (item.fornecedor || '—') + '</div>'
+             +     '<div class="historico">' + (item.historico || '') + '</div></td>'
+             +  '<td>' + catHtml + '</td>'
+             +  '<td class="valor-cell">' + fmtBRL(item.valor) + '</td>'
+             +  '<td><div style="display:flex; gap:6px;">';
+        if (ov) {
+          html +=    '<button class="btn-move" onclick="abrirMover(\'' + item.bling_id + '\')">Re-mover</button>'
+                +    '<button class="btn-revert" onclick="reverter(\'' + item.bling_id + '\')">Reverter</button>';
+        } else {
+          html +=    '<button class="btn-move" onclick="abrirMover(\'' + item.bling_id + '\')">Mover</button>';
+        }
+        html += '</div></td></tr>';
+      });
+      if (!html) html = '<tr><td colspan="5" style="text-align:center; color:#8b949e; padding:30px;">Nenhum título no filtro.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+      document.getElementById('qt-titulos').textContent = filtrados.length;
+      document.getElementById('s-total').textContent = fmtBRL(totVal);
+      document.getElementById('s-mov').textContent = totMov + '/' + filtrados.length;
+      document.getElementById('s-cap').textContent = fmtBRL(totCap);
+    }
+
+    // Modal Mover
+    window.abrirMover = function(blingId) {
+      var item = pagar.find(function(x) { return x.bling_id === blingId; });
+      if (!item) return;
+      movendo = item;
+      var ov = overrides[blingId];
+
+      document.getElementById('mv-fornecedor').textContent = item.fornecedor || '—';
+      document.getElementById('mv-historico').textContent = item.historico || '—';
+      document.getElementById('mv-valor').textContent = fmtBRL(item.valor);
+      document.getElementById('mv-original').textContent = fmtDateBR(item.vencimento);
+      document.getElementById('mv-categoria').textContent = item.categoria_bling || '— sem categoria no Bling —';
+
+      var cat = matchCategoria(item.categoria_bling);
+      var info = cat
+        ? 'Categoria: ' + cat.nome + ' | Prioridade ' + cat.prioridade + ' | Máx ' + cat.dias_max_atraso + ' dias | Custo: '
+          + Number(cat.custo_dia_atraso_pct || 0).toFixed(3) + '% a.d. + ' + fmtBRL(cat.custo_dia_atraso_fixo || 0) + '/dia'
+        : 'Categoria não cadastrada — custo do atraso = 0 no cálculo';
+      document.getElementById('mv-cat-info').textContent = info;
+
+      document.getElementById('mv-nova-data').value = ov ? ov.data_nova : item.vencimento;
+      document.getElementById('mv-motivo').value = ov ? ov.motivo : 'atraso_voluntario';
+      document.getElementById('mv-obs').value = ov ? (ov.observacao || '') : '';
+      recalcularMover();
+
+      document.getElementById('modal-mover').classList.add('show');
+    };
+
+    function recalcularMover() {
+      if (!movendo) return;
+      var nova = document.getElementById('mv-nova-data').value;
+      if (!nova) {
+        document.getElementById('mv-dias').textContent = '—';
+        document.getElementById('mv-custo').textContent = 'R$ 0';
+        return;
+      }
+      var dias = diasEntre(movendo.vencimento, nova);
+      document.getElementById('mv-dias').textContent = dias + (dias === 1 ? ' dia' : ' dias');
+      var cat = matchCategoria(movendo.categoria_bling);
+      var custo = 0;
+      if (cat && dias > 0) {
+        var custoPct = (Number(cat.custo_dia_atraso_pct || 0) / 100) * Number(movendo.valor || 0) * dias;
+        var custoFix = Number(cat.custo_dia_atraso_fixo || 0) * dias;
+        custo = custoPct + custoFix;
+        if (cat.dias_max_atraso && dias > cat.dias_max_atraso) {
+          document.getElementById('mv-dias').textContent = dias + ' dias ⚠ EXCEDE máximo de ' + cat.dias_max_atraso;
+        }
+      }
+      document.getElementById('mv-custo').textContent = fmtBRL(custo);
+      movendo._custoCalc = custo;
+    }
+
+    document.getElementById('mv-nova-data').addEventListener('change', recalcularMover);
+    document.getElementById('mv-nova-data').addEventListener('input', recalcularMover);
+
+    document.getElementById('mv-cancelar').onclick = function() {
+      document.getElementById('modal-mover').classList.remove('show');
+      movendo = null;
+    };
+
+    document.getElementById('mv-salvar').onclick = async function() {
+      if (!movendo) return;
+      var nova = document.getElementById('mv-nova-data').value;
+      if (!nova) { showMsg('Defina o novo vencimento.', 'error'); return; }
+
+      var payload = {
+        bling_conta_id: String(movendo.bling_id),
+        data_original: movendo.vencimento,
+        data_nova: nova,
+        motivo: document.getElementById('mv-motivo').value,
+        custo_atraso: movendo._custoCalc || 0,
+        observacao: document.getElementById('mv-obs').value.trim() || null
+      };
+
+      var existing = overrides[movendo.bling_id];
+      var r;
+      if (existing) r = await sb.from('cash_overrides_pagamento').update(payload).eq('id', existing.id);
+      else          r = await sb.from('cash_overrides_pagamento').insert(payload);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Movimentação salva. Veja o impacto no Dashboard (Cenário Decisões).', 'success');
+      document.getElementById('modal-mover').classList.remove('show');
+      movendo = null;
+      await carregarBase();
+      renderTabela();
+    };
+
+    window.reverter = async function(blingId) {
+      var ov = overrides[blingId];
+      if (!ov) return;
+      if (!confirm('Reverter movimentação? O título volta ao vencimento original.')) return;
+      var r = await sb.from('cash_overrides_pagamento').delete().eq('id', ov.id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Movimentação revertida.', 'success');
+      await carregarBase();
+      renderTabela();
+    };
+
+    // Filters
+    document.querySelectorAll('.chip').forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('active'); });
+        chip.classList.add('active');
+        var v = chip.dataset.rng;
+        if (v === 'vencidos') { rangeMode = 'vencidos'; }
+        else if (v === 'movidos') { rangeMode = 'movidos'; }
+        else if (v === 'tudo') { rangeMode = 'tudo'; }
+        else { rangeMode = 'futuro'; rangeWeeks = parseInt(v); }
+        renderTabela();
+      });
+    });
+    document.getElementById('f_busca').addEventListener('input', renderTabela);
+
+    carregarBase().then(renderTabela);
+  </script>
+</body>
+</html>
