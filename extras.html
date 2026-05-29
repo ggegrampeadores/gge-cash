@@ -139,3 +139,147 @@
             <th>Categoria</th>
             <th>Descricao</th>
             <th style="width:160px; text-align:right;">Valor</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    var CATEGORIAS = {
+      'aporte_emprestimo': 'Aporte emprestimo',
+      'despesa_imprevista': 'Despesa imprevista',
+      'recebimento_pontual': 'Recebimento pontual',
+      'outros': 'Outros'
+    };
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    function hojeISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    async function carregarAlavancas() {
+      var r = await sb.from('cash_alavancas').select('id,nome').eq('ativo', true).order('nome');
+      var sel = document.getElementById('f_alavanca');
+      sel.innerHTML = '<option value="">— nenhuma —</option>';
+      (r.data || []).forEach(function(a) {
+        sel.innerHTML += '<option value="' + a.id + '">' + a.nome + '</option>';
+      });
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_lancamentos_extras').select('*').order('data', { ascending: false });
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var dados = r.data || [];
+
+      var hoje = new Date(); hoje.setHours(0,0,0,0);
+      var lim = new Date(hoje); lim.setDate(lim.getDate() + 60);
+      var entradas = 0, saidas = 0;
+      dados.forEach(function(e) {
+        var d = new Date(e.data + 'T00:00:00');
+        if (d >= hoje && d <= lim) {
+          if (e.tipo === 'entrada') entradas += Number(e.valor || 0);
+          else saidas += Number(e.valor || 0);
+        }
+      });
+      document.getElementById('sum-entradas').textContent = fmtBRL(entradas);
+      document.getElementById('sum-saidas').textContent = fmtBRL(saidas);
+      document.getElementById('sum-liquido').textContent = fmtBRL(entradas - saidas);
+
+      var html = '';
+      dados.forEach(function(e) {
+        var sinal = e.tipo === 'entrada' ? '+' : '-';
+        html += '<tr>'
+             +  '<td>' + fmtDateBR(e.data) + '</td>'
+             +  '<td><span class="pill pill-' + e.tipo + '">' + e.tipo.toUpperCase() + '</span></td>'
+             +  '<td>' + (CATEGORIAS[e.categoria] || e.categoria || '') + '</td>'
+             +  '<td style="color:#c9d1d9;">' + (e.descricao || '') + '</td>'
+             +  '<td class="valor-cell ' + e.tipo + '" style="text-align:right;">' + sinal + ' ' + fmtBRL(e.valor) + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + e.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="excluir(\'' + e.id + '\')">Excluir</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="6" style="text-align:center; color:#8b949e; padding:30px;">Nenhum lancamento ainda.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Novo lancamento extra';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_data').value = hojeISO();
+      document.getElementById('f_tipo').value = 'entrada';
+      document.getElementById('f_categoria').value = 'aporte_emprestimo';
+      document.getElementById('f_valor').value = '';
+      document.getElementById('f_alavanca').value = '';
+      document.getElementById('f_desc').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_lancamentos_extras').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var e = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando lancamento de ' + fmtDateBR(e.data);
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_data').value = e.data;
+      document.getElementById('f_tipo').value = e.tipo;
+      document.getElementById('f_categoria').value = e.categoria || 'outros';
+      document.getElementById('f_valor').value = e.valor;
+      document.getElementById('f_alavanca').value = e.alavanca_id || '';
+      document.getElementById('f_desc').value = e.descricao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.excluir = async function(id) {
+      if (!confirm('Excluir este lancamento?')) return;
+      var r = await sb.from('cash_lancamentos_extras').delete().eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Lancamento excluido.', 'success');
+      carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var data = document.getElementById('f_data').value;
+      var valor = document.getElementById('f_valor').value;
+      if (!data) { showMsg('Data e obrigatoria.', 'error'); return; }
+      if (!valor || parseFloat(valor) <= 0) { showMsg('Valor e obrigatorio.', 'error'); return; }
+      var payload = {
+        data: data,
+        tipo: document.getElementById('f_tipo').value,
+        categoria: document.getElementById('f_categoria').value,
+        valor: parseFloat(valor),
+        alavanca_id: document.getElementById('f_alavanca').value || null,
+        descricao: document.getElementById('f_desc').value.trim() || null
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_lancamentos_extras').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_lancamentos_extras').insert(payload);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Lancamento atualizado.' : 'Lancamento criado.', 'success');
+      limparForm();
+      carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+
+    document.getElementById('f_data').value = hojeISO();
+    carregarAlavancas().then(carregar);
+  </script>
+</body>
+</html>
