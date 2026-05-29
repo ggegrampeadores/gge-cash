@@ -43,18 +43,13 @@
     .cenario.sugestao h2 { color:#3fb950; background:#0c1a10; }
     .cenario h2 .saldo-final { font-family:'SF Mono',Menlo,monospace; font-size:13px; font-weight:700; }
 
-    table { width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
-    th, td { padding:8px 6px; border-bottom:1px solid #21262d; text-align:right;
-             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { padding:8px 10px; border-bottom:1px solid #21262d; text-align:right; }
     th { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.3px; font-weight:600;
          background:#0d1117; }
-    th.semana, td.semana { text-align:left; width:24%; }
-    th.col-ent, td.col-ent { width:18%; }
-    th.col-sai, td.col-sai { width:18%; }
-    th.col-sem, td.col-sem { width:20%; }
-    th.col-acu, td.col-acu { width:20%; }
-    .week-num { color:#58a6ff; font-weight:700; font-family:'SF Mono',Menlo,monospace; font-size:11px; }
-    .week-periodo { color:#8b949e; font-size:9px; display:block; margin-top:1px; }
+    th.semana, td.semana { text-align:left; }
+    .week-num { color:#58a6ff; font-weight:700; font-family:'SF Mono',Menlo,monospace; }
+    .week-periodo { color:#8b949e; font-size:10px; margin-left:6px; }
     .entradas { color:#3fb950; font-family:'SF Mono',Menlo,monospace; }
     .saidas { color:#f85149; font-family:'SF Mono',Menlo,monospace; }
     .saldo-pos { color:#3fb950; font-family:'SF Mono',Menlo,monospace; font-weight:600; }
@@ -68,7 +63,7 @@
     tr.semana-row.atual td.semana { font-weight:700; }
     tr.detail { display:none; }
     tr.detail.show { display:table-row; }
-    tr.detail td { background:#0d1117; padding:14px 16px; text-align:left; white-space:normal; }
+    tr.detail td { background:#0d1117; padding:14px 16px; text-align:left; }
     .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
     .detail-section h4 { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.4px;
                          margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid #30363d; }
@@ -132,6 +127,8 @@
     <div class="cenarios" id="cenarios">
       <div class="loading">Carregando forecast...</div>
     </div>
+
+    <div id="plano-sugerido" style="margin-top:24px;"></div>
   </div>
 
   <script src="sidebar.js" defer></script>
@@ -139,7 +136,6 @@
     var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
     var FORECAST_URL = window.GGE_SUPABASE_URL + '/functions/v1/cash-forecast';
 
-    // Formato compacto: 999 -> "R$ 999", 1234 -> "R$ 1,2k", 1234567 -> "R$ 1,2M"
     function fmtBRLk(n) {
       if (n === null || n === undefined || isNaN(n)) return 'R$ 0';
       var abs = Math.abs(Number(n));
@@ -207,17 +203,17 @@
       var html = '<div class="cenario '+classeNome+'">'
                + '<h2>'+nome+'<span class="saldo-final '+classeAcum(saldoFinal)+'" title="'+fmtBRL(saldoFinal)+'">'+fmtBRLk(saldoFinal)+'</span></h2>'
                + '<table><thead><tr>'
-               + '<th class="semana">Semana</th><th class="col-ent">Entradas</th><th class="col-sai">Saídas</th><th class="col-sem">Saldo sem.</th><th class="col-acu">Acum.</th>'
+               + '<th class="semana">Semana</th><th>Entradas</th><th>Saídas</th><th>Saldo sem.</th><th>Acum.</th>'
                + '</tr></thead><tbody>';
       dados.semanas.forEach(function(w, i) {
         var atualClass = (i === 0) ? ' atual' : '';
         html += '<tr class="semana-row'+atualClass+'" data-cen="'+classeNome+'" data-idx="'+i+'">'
              +  '<td class="semana"><span class="week-num">S'+w.semana+'</span>'
              +     '<span class="week-periodo">'+periodoCurto(w.inicio, w.fim)+'</span></td>'
-             +  '<td class="entradas col-ent" title="'+fmtBRL(w.entradas.total)+'">'+fmtBRLk(w.entradas.total)+'</td>'
-             +  '<td class="saidas col-sai" title="'+fmtBRL(w.saidas.total)+'">'+fmtBRLk(w.saidas.total)+'</td>'
-             +  '<td class="col-sem '+classeSaldo(w.saldo_semana)+'" title="'+fmtBRL(w.saldo_semana)+'">'+fmtBRLk(w.saldo_semana)+'</td>'
-             +  '<td class="col-acu '+classeAcum(w.saldo_acumulado)+'" title="'+fmtBRL(w.saldo_acumulado)+'">'+fmtBRLk(w.saldo_acumulado)+'</td>'
+             +  '<td class="entradas" title="'+fmtBRL(w.entradas.total)+'">'+fmtBRLk(w.entradas.total)+'</td>'
+             +  '<td class="saidas" title="'+fmtBRL(w.saidas.total)+'">'+fmtBRLk(w.saidas.total)+'</td>'
+             +  '<td class="'+classeSaldo(w.saldo_semana)+'" title="'+fmtBRL(w.saldo_semana)+'">'+fmtBRLk(w.saldo_semana)+'</td>'
+             +  '<td class="'+classeAcum(w.saldo_acumulado)+'" title="'+fmtBRL(w.saldo_acumulado)+'">'+fmtBRLk(w.saldo_acumulado)+'</td>'
              +  '</tr>'
              +  '<tr class="detail" data-cen="'+classeNome+'" data-detail="'+i+'"><td colspan="5">'
              +     renderDetalhe(w) + '</td></tr>';
@@ -235,6 +231,64 @@
           if (det) det.classList.toggle('show');
         });
       });
+    }
+
+    function renderPlano(acoes, contagens) {
+      var el = document.getElementById('plano-sugerido');
+      if (!acoes || acoes.length === 0) {
+        el.innerHTML = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; color:#8b949e; font-size:13px;">'
+          + 'O cenário Sugestão não precisou de nenhuma ação — o caixa já fecha positivo sem intervenção.</div>';
+        return;
+      }
+      var atrasos = acoes.filter(function(a){ return a.tipo==='atrasar_pagamento'; });
+      var emprestimos = acoes.filter(function(a){ return a.tipo==='captar_emprestimo'; });
+      var custoTotal = acoes.reduce(function(s,a){ return s + (a.custo_estimado||a.juros_total||0); }, 0);
+      var temMapeada = atrasos.some(function(a){ return a.regra==='mapeada'; });
+
+      var html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; overflow:hidden;">'
+        + '<div style="padding:14px 18px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">'
+        + '<span style="font-size:14px; font-weight:600; color:#3fb950; text-transform:uppercase; letter-spacing:.5px;">Plano sugerido para fechar o caixa</span>'
+        + '<span style="font-size:12px; color:#8b949e;">Custo total do plano: <strong style="color:#d29922;">'+fmtBRLk(custoTotal)+'</strong></span>'
+        + '</div>';
+
+      if (!temMapeada) {
+        html += '<div style="padding:10px 18px; background:#1a1408; color:#d29922; font-size:12px;">'
+          + 'As regras de atraso estão usando o padrão (7 dias, 0,15%/dia) porque os títulos ainda não têm categoria mapeada. Faça o de-para em <strong>/mapeamento</strong> para usar suas regras reais.</div>';
+      }
+
+      if (atrasos.length) {
+        html += '<div style="padding:12px 18px;"><div style="font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;">Atrasar '+atrasos.length+' pagamento(s)</div>';
+        html += '<table style="width:100%; font-size:12px;"><thead><tr style="color:#8b949e; font-size:10px; text-transform:uppercase;">'
+          + '<th style="text-align:left; padding:4px 8px;">Fornecedor / Histórico</th><th style="text-align:left; padding:4px 8px;">Categoria</th>'
+          + '<th style="text-align:right; padding:4px 8px;">Valor</th><th style="text-align:center; padding:4px 8px;">De → Para</th><th style="text-align:right; padding:4px 8px;">Custo</th></tr></thead><tbody>';
+        atrasos.slice(0,40).forEach(function(a){
+          var desc = (a.fornecedor || a.historico || '—');
+          if (desc.length > 42) desc = desc.slice(0,42)+'…';
+          html += '<tr style="border-top:1px solid #21262d;">'
+            + '<td style="padding:5px 8px; color:#c9d1d9;">'+desc+'</td>'
+            + '<td style="padding:5px 8px; color:'+(a.regra==='mapeada'?'#58a6ff':'#6e7681')+';">'+a.categoria+'</td>'
+            + '<td style="padding:5px 8px; text-align:right; font-family:monospace; color:#f85149;">'+fmtBRLk(a.valor)+'</td>'
+            + '<td style="padding:5px 8px; text-align:center; font-family:monospace; color:#d29922;">+'+a.dias_atraso+'d</td>'
+            + '<td style="padding:5px 8px; text-align:right; font-family:monospace; color:#d29922;">'+fmtBRLk(a.custo_estimado)+'</td></tr>';
+        });
+        html += '</tbody></table>';
+        if (atrasos.length > 40) html += '<div style="color:#8b949e; font-size:11px; margin-top:6px;">… e mais '+(atrasos.length-40)+' (use /pagamentos para ver e aplicar todos)</div>';
+        html += '</div>';
+      }
+
+      if (emprestimos.length) {
+        html += '<div style="padding:12px 18px; border-top:1px solid #30363d;"><div style="font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;">Captar '+emprestimos.length+' empréstimo(s)</div>';
+        emprestimos.forEach(function(e){
+          html += '<div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-top:1px solid #21262d;">'
+            + '<span style="color:#c9d1d9;">'+e.alavanca+' — semana '+e.para_semana+'</span>'
+            + '<span style="font-family:monospace;"><span style="color:#3fb950;">+'+fmtBRLk(e.valor_captado)+'</span> <span style="color:#8b949e;">(juros '+fmtBRLk(e.juros_total)+', '+e.prazo_dias+'d)</span></span></div>';
+        });
+        html += '</div>';
+      }
+
+      html += '<div style="padding:10px 18px; border-top:1px solid #30363d; color:#8b949e; font-size:11px;">Estas são sugestões. Para adotar: aplique os atrasos em <strong>/pagamentos</strong> ("Mover") e registre os empréstimos em <strong>/decisoes</strong>. Aí passam a contar no cenário Decisões.</div>';
+      html += '</div>';
+      el.innerHTML = html;
     }
 
     async function carregar() {
@@ -272,10 +326,10 @@
         var alertasEl = document.getElementById('alertas');
         var alertasHtml = '';
         if (!d.data_saldo_inicial) {
-          alertasHtml += '<div class="alerta warn">⚠ Sem saldo bancário lançado — o forecast parte de zero. Vá em <strong>/saldos</strong> e lance o saldo do dia.</div>';
+          alertasHtml += '<div class="alerta warn">Sem saldo bancário lançado — o forecast parte de zero. Vá em <strong>/saldos</strong> e lance o saldo do dia.</div>';
         }
         if (d.cenarios.inercia.saldo_final < 0) {
-          alertasHtml += '<div class="alerta">⚠ Cenário Inércia termina em <strong title="'+fmtBRL(d.cenarios.inercia.saldo_final)+'">'+fmtBRLk(d.cenarios.inercia.saldo_final)+'</strong>. Use Alavancas / Decisões para zerar o gap.</div>';
+          alertasHtml += '<div class="alerta">Cenário Inércia termina em <strong title="'+fmtBRL(d.cenarios.inercia.saldo_final)+'">'+fmtBRLk(d.cenarios.inercia.saldo_final)+'</strong>. Use Alavancas / Decisões para zerar o gap.</div>';
         }
         alertasEl.innerHTML = alertasHtml;
 
@@ -289,6 +343,7 @@
         + '<div class="contagem-chip">Pendências: <strong>'+c.pendencias+'</strong></div>'
         + '<div class="contagem-chip">Decisões ativas: <strong>'+c.decisoes_ativas+'</strong></div>'
         + '<div class="contagem-chip">Overrides: <strong>'+c.overrides+'</strong></div>'
+        + '<div class="contagem-chip">Mapeamentos: <strong>'+(c.mapeamentos_bling||0)+'</strong></div>'
         + '<div class="contagem-chip">Extras: <strong>'+c.extras+'</strong></div>'
         + '<div class="contagem-chip">Investimentos: <strong>'+c.investimentos+'</strong></div>';
 
@@ -297,6 +352,7 @@
           + renderCenario('Decisões', 'decisoes', d.cenarios.decisoes, 0)
           + renderCenario('Sugestão', 'sugestao', d.cenarios.sugestao, 0);
         ligarToggle();
+        renderPlano(d.cenarios.sugestao.detalhe_sugestoes || [], d.contagens);
       } catch (e) {
         document.getElementById('cenarios').innerHTML =
           '<div class="alerta">Erro: ' + (e.message || e) + '</div>';
