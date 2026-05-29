@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapeamento Bling - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:20px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9; text-transform:uppercase; letter-spacing:.5px; }
+    .summary { display:flex; gap:14px; margin-bottom:18px; }
+    .summary-item { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px; flex:1; }
+    .summary-item .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .summary-item .valor { font-size:20px; font-weight:700; margin-top:4px; }
+    .summary-item.mapeados .valor { color:#3fb950; }
+    .summary-item.faltam .valor { color:#d29922; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d; font-size:12px; vertical-align:top; }
+    th { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.4px; font-weight:600; background:#0d1117; position:sticky; top:0; }
+    tr:hover td { background:#1f2630; }
+    .blingid { font-family:'SF Mono',Menlo,monospace; color:#58a6ff; font-size:11px; }
+    .amostra { color:#8b949e; font-size:11px; line-height:1.5; }
+    .amostra b { color:#c9d1d9; font-weight:500; }
+    .valor-cell { font-family:'SF Mono',Menlo,monospace; text-align:right; color:#f85149; font-weight:600; }
+    .qt-cell { text-align:center; font-family:'SF Mono',Menlo,monospace; }
+    select { width:100%; padding:7px 9px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:5px; font-size:12px; }
+    select.mapeado { border-color:#3fb950; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px; font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .loading { text-align:center; padding:40px; color:#8b949e; }
+    .hint { background:#1a2233; border-radius:6px; padding:12px 14px; font-size:12px; color:#c9d1d9; margin-bottom:18px; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Mapeamento Bling → Categorias</h1>
+    <p class="subtitle">Associe cada categoria do Bling (que vem como número) à sua categoria com regra de atraso. Faça uma vez — a sugestão do dashboard passa a respeitar prioridade e custo de atraso de cada despesa.</p>
+
+    <div class="hint">
+      O Bling identifica categorias por um número (ex: <span class="blingid">6217230281</span>). Pra cada número abaixo, olhe os exemplos de fornecedor/histórico e escolha a categoria correspondente no menu. Salva automático ao escolher.
+    </div>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="summary">
+      <div class="summary-item mapeados">
+        <div class="label">Mapeados</div>
+        <div class="valor" id="s-map">0</div>
+      </div>
+      <div class="summary-item faltam">
+        <div class="label">Faltam mapear</div>
+        <div class="valor" id="s-falta">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Categorias do Bling encontradas nos títulos</h2>
+      <div id="tabela-wrap"><div class="loading">Carregando...</div></div>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var categorias = [];
+    var mapaAtual = {};
+
+    function showMsg(t, tp) { var el=document.getElementById('msg'); el.className='msg show '+tp; el.textContent=t; setTimeout(function(){el.className='msg';}, 3000); }
+
+    async function carregarTudo() {
+      var rCat = await sb.from('cash_categorias').select('id,nome,prioridade,dias_max_atraso').eq('ativo', true).order('prioridade').order('nome');
+      categorias = rCat.data || [];
+      var rMap = await sb.from('cash_bling_cat_map').select('*');
+      mapaAtual = {};
+      (rMap.data || []).forEach(function(m){ mapaAtual[m.bling_categoria_id] = m.cash_categoria_id; });
+
+      var rows = [];
+      var from = 0;
+      while (true) {
+        var r = await sb.from('cash_bling_pagar_cache').select('categoria_bling,valor,fornecedor,historico').not('categoria_bling','is',null).range(from, from+999);
+        if (r.error) { showMsg('Erro: '+r.error.message,'error'); break; }
+        var d = r.data || [];
+        rows = rows.concat(d);
+        if (d.length < 1000) break;
+        from += 1000; if (from>50000) break;
+      }
+
+      var grupos = {};
+      rows.forEach(function(x){
+        var k = x.categoria_bling;
+        if (!grupos[k]) grupos[k] = { id:k, qt:0, total:0, fornecedores:{}, historicos:{} };
+        grupos[k].qt++;
+        grupos[k].total += Number(x.valor||0);
+        if (x.fornecedor) grupos[k].fornecedores[x.fornecedor] = (grupos[k].fornecedores[x.fornecedor]||0)+1;
+        if (x.historico) grupos[k].historicos[x.historico] = (grupos[k].historicos[x.historico]||0)+1;
+      });
+      var lista = Object.values(grupos).sort(function(a,b){ return b.total - a.total; });
+      render(lista);
+    }
+
+    function topN(obj, n) {
+      return Object.entries(obj).sort(function(a,b){return b[1]-a[1];}).slice(0,n).map(function(e){return e[0];});
+    }
+
+    function render(lista) {
+      var optsBase = '<option value="">— escolher categoria —</option>' +
+        categorias.map(function(c){ return '<option value="'+c.id+'">'+c.nome+' (prio '+c.prioridade+', '+c.dias_max_atraso+'d)</option>'; }).join('');
+      var html = '<table><thead><tr>'
+        + '<th style="width:120px;">ID Bling</th><th style="width:70px;">Títulos</th><th style="width:120px;">Total R$</th>'
+        + '<th>Exemplos (fornecedor / histórico)</th><th style="width:280px;">Sua categoria</th>'
+        + '</tr></thead><tbody>';
+      lista.forEach(function(g){
+        var forns = topN(g.fornecedores, 2);
+        var hists = topN(g.historicos, 3);
+        var amostra = '';
+        if (forns.length) amostra += '<b>'+forns.join(' · ')+'</b><br>';
+        if (hists.length) amostra += hists.join(' · ');
+        if (!amostra) amostra = '<i>sem fornecedor/histórico ainda (backfill rodando)</i>';
+        var sel = mapaAtual[g.id] || '';
+        html += '<tr>'
+          + '<td><span class="blingid">'+g.id+'</span></td>'
+          + '<td class="qt-cell">'+g.qt+'</td>'
+          + '<td class="valor-cell">'+fmtBRL(g.total)+'</td>'
+          + '<td class="amostra">'+amostra+'</td>'
+          + '<td><select class="'+(sel?'mapeado':'')+'" data-bid="'+g.id+'" onchange="salvarMap(this)">'+optsBase+'</select></td>'
+          + '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('tabela-wrap').innerHTML = html;
+      document.querySelectorAll('select[data-bid]').forEach(function(s){ var v = mapaAtual[s.dataset.bid]; if (v) s.value = v; });
+      atualizarContagem(lista);
+    }
+
+    function atualizarContagem(lista) {
+      var map=0, falta=0;
+      lista.forEach(function(g){ if (mapaAtual[g.id]) map++; else falta++; });
+      document.getElementById('s-map').textContent = map;
+      document.getElementById('s-falta').textContent = falta;
+    }
+
+    window.salvarMap = async function(selEl) {
+      var bid = selEl.dataset.bid;
+      var cid = selEl.value;
+      if (!cid) {
+        await sb.from('cash_bling_cat_map').delete().eq('bling_categoria_id', bid);
+        delete mapaAtual[bid];
+        selEl.classList.remove('mapeado');
+        showMsg('Mapeamento removido.', 'success');
+      } else {
+        var r = await sb.from('cash_bling_cat_map').upsert({ bling_categoria_id: bid, cash_categoria_id: cid }, { onConflict:'bling_categoria_id' });
+        if (r.error) { showMsg('Erro: '+r.error.message,'error'); return; }
+        mapaAtual[bid] = cid;
+        selEl.classList.add('mapeado');
+        showMsg('Mapeado! O dashboard vai usar essa regra.', 'success');
+      }
+      var map = Object.keys(mapaAtual).length;
+      document.getElementById('s-map').textContent = map;
+      var total = document.querySelectorAll('select[data-bid]').length;
+      document.getElementById('s-falta').textContent = total - map;
+    };
+
+    carregarTudo();
+  </script>
+</body>
+</html>
