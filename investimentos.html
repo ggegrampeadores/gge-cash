@@ -93,4 +93,134 @@
       </div>
       <div class="actions">
         <button class="btn-primary" id="btn-salvar">Salvar</button>
-        <button class="btn-secondary" id="btn-c
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edicao</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Previstos cadastrados</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Descricao</th>
+            <th style="width:130px;">Data prevista</th>
+            <th style="width:140px;">Tipo</th>
+            <th style="width:160px; text-align:right;">Valor</th>
+            <th>Observacao</th>
+            <th style="width:140px;">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+
+    function showMsg(texto, tipo) {
+      var el = document.getElementById('msg');
+      el.className = 'msg show ' + tipo;
+      el.textContent = texto;
+      setTimeout(function() { el.className = 'msg'; }, 3500);
+    }
+
+    function hojeISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_investimentos_previstos').select('*').eq('ativo', true).order('data_prevista');
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var html = '';
+      (r.data || []).forEach(function(i) {
+        var tipoPill = i.recorrente
+          ? '<span class="pill pill-rec">A cada ' + (i.recorrencia_meses || '?') + ' mes(es)</span>'
+          : '<span class="pill">Unico</span>';
+        html += '<tr>'
+             +  '<td><strong>' + (i.descricao || '') + '</strong></td>'
+             +  '<td>' + fmtDateBR(i.data_prevista) + '</td>'
+             +  '<td>' + tipoPill + '</td>'
+             +  '<td class="valor-cell">' + fmtBRL(i.valor) + '</td>'
+             +  '<td style="color:#8b949e;">' + (i.observacao || '') + '</td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + i.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="remover(\'' + i.id + '\')">Remover</button>'
+             +     '</div></td>'
+             +  '</tr>';
+      });
+      if (!html) html = '<tr><td colspan="6" style="text-align:center; color:#8b949e; padding:30px;">Nenhum investimento previsto.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Novo investimento previsto';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      document.getElementById('f_desc').value = '';
+      document.getElementById('f_valor').value = '';
+      document.getElementById('f_data').value = hojeISO();
+      document.getElementById('f_recorrente').value = 'false';
+      document.getElementById('f_rec_meses').value = '';
+      document.getElementById('f_obs').value = '';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_investimentos_previstos').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var i = r.data;
+      editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando: ' + i.descricao;
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_desc').value = i.descricao || '';
+      document.getElementById('f_valor').value = i.valor;
+      document.getElementById('f_data').value = i.data_prevista;
+      document.getElementById('f_recorrente').value = i.recorrente ? 'true' : 'false';
+      document.getElementById('f_rec_meses').value = i.recorrencia_meses || '';
+      document.getElementById('f_obs').value = i.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.remover = async function(id) {
+      if (!confirm('Remover este investimento previsto?')) return;
+      var r = await sb.from('cash_investimentos_previstos').update({ ativo: false }).eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Investimento removido.', 'success');
+      carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var desc = document.getElementById('f_desc').value.trim();
+      var valor = document.getElementById('f_valor').value;
+      var data = document.getElementById('f_data').value;
+      if (!desc) { showMsg('Descricao e obrigatoria.', 'error'); return; }
+      if (!valor || parseFloat(valor) <= 0) { showMsg('Valor e obrigatorio.', 'error'); return; }
+      if (!data) { showMsg('Data e obrigatoria.', 'error'); return; }
+      var payload = {
+        descricao: desc,
+        valor: parseFloat(valor),
+        data_prevista: data,
+        recorrente: document.getElementById('f_recorrente').value === 'true',
+        recorrencia_meses: parseInt(document.getElementById('f_rec_meses').value) || null,
+        observacao: document.getElementById('f_obs').value.trim() || null,
+        ativo: true
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_investimentos_previstos').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_investimentos_previstos').insert(payload);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Investimento atualizado.' : 'Investimento criado.', 'success');
+      limparForm();
+      carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+
+    document.getElementById('f_data').value = hojeISO();
+    carregar();
+  </script>
+</body>
+</html>
