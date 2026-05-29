@@ -1,9 +1,6 @@
 // =====================================================================
 // GGE CASH — Sidebar lateral compartilhado
 // =====================================================================
-// Insere a barra lateral em todas as paginas. Auto-injetado em
-// <div id="sidebar-container"></div>
-// =====================================================================
 
 (function() {
   var path = window.location.pathname || '';
@@ -14,6 +11,8 @@
     { id: 'index',         label: 'Dashboard',     href: 'index.html',         icon: '▤' },
     { id: 'saldos',        label: 'Saldos',        href: 'saldos.html',        icon: '◎' },
     { id: 'metas',         label: 'Metas',         href: 'metas.html',         icon: '○' },
+    { id: 'decisoes',      label: 'Decisões',      href: 'decisoes.html',      icon: '★' },
+    { id: 'pagamentos',    label: 'Pagamentos',    href: 'pagamentos.html',    icon: '⇄' },
     { id: 'extras',        label: 'Extras',        href: 'extras.html',        icon: '±' },
     { id: 'pendencias',    label: 'Pendencias',    href: 'pendencias.html',    icon: '⚠' },
     { id: 'investimentos', label: 'Investimentos', href: 'investimentos.html', icon: '▲' },
@@ -51,7 +50,7 @@
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var active = (it.id === arquivoAtual) ? ' class="active"' : '';
-    html += '<a href="' + it.href + '"' + active.replace('class=','class=') + '>'
+    html += '<a href="' + it.href + '"' + active + '>'
          +  '<span class="icon">' + it.icon + '</span>'
          +  '<span class="label">' + it.label + '</span>'
          +  '</a>';
