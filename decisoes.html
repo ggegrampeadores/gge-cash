@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decisões - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:24px 32px; }
+    h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+    .subtitle { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px;
+            padding:20px; margin-bottom:20px; }
+    .card h2 { font-size:14px; font-weight:600; margin-bottom:14px; color:#c9d1d9;
+               text-transform:uppercase; letter-spacing:.5px; }
+    .form-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+    .form-grid .full { grid-column:1 / -1; }
+    .form-grid label { display:block; font-size:11px; color:#8b949e;
+                       margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d;
+      color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit;
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus { outline:none; border-color:#58a6ff; }
+    .form-grid textarea { resize:vertical; min-height:60px; }
+    .form-grid .field-hint { font-size:10px; color:#8b949e; margin-top:3px; }
+    .form-grid .calc-row { background:#1a2233; border-radius:5px; padding:8px 10px; }
+    .actions { display:flex; gap:10px; margin-top:14px; }
+    button { padding:8px 16px; border:none; border-radius:5px; cursor:pointer;
+             font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; }
+    .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; }
+    .btn-secondary:hover { background:#3f444d; }
+    .btn-danger { background:#da3633; color:#fff; }
+    .btn-danger:hover { background:#f85149; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #30363d; font-size:13px; }
+    th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; font-weight:600; }
+    tr:hover td { background:#1f2630; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .pill-planejada { background:#332b09; color:#d29922; }
+    .pill-executada { background:#0d3920; color:#3fb950; }
+    .pill-cancelada { background:#3a1e1f; color:#f85149; }
+    .valor-cell { font-family:'SF Mono',Menlo,monospace; text-align:right; }
+    .valor-ent { color:#3fb950; }
+    .valor-juros { color:#d29922; }
+    .msg { padding:10px 14px; border-radius:5px; margin-bottom:14px; font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:4px 10px; font-size:12px; }
+    .summary { display:flex; gap:14px; margin-bottom:18px; }
+    .summary-item { background:#161b22; border:1px solid #30363d; border-radius:8px;
+                    padding:14px 18px; flex:1; }
+    .summary-item .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .summary-item .valor { font-size:20px; font-weight:700; margin-top:4px; font-family:'SF Mono',Menlo,monospace; }
+    .summary-item.captado .valor { color:#3fb950; }
+    .summary-item.juros .valor { color:#d29922; }
+    .summary-item.contagem .valor { color:#58a6ff; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <h1>Decisões financeiras</h1>
+    <p class="subtitle">Registre antecipações, empréstimos e outras captações. Cada decisão entra como captação na data, e como saída (parcela ou vencimento único) a partir da data de início de pagamento. Reflete no Cenário Decisões.</p>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="summary">
+      <div class="summary-item contagem">
+        <div class="label">Decisões ativas</div>
+        <div class="valor" id="s-count">0</div>
+      </div>
+      <div class="summary-item captado">
+        <div class="label">Captado (líquido, ativas)</div>
+        <div class="valor" id="s-captado">R$ 0</div>
+      </div>
+      <div class="summary-item juros">
+        <div class="label">Juros total (ativas)</div>
+        <div class="valor" id="s-juros">R$ 0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="form-title">+ Nova decisão</h2>
+      <div class="form-grid">
+        <div>
+          <label>Alavanca</label>
+          <select id="f_alavanca"><option value="">— selecione —</option></select>
+          <div class="field-hint">Cadastra em /alavancas</div>
+        </div>
+        <div>
+          <label>Data da decisão</label>
+          <input id="f_data" type="date">
+          <div class="field-hint">Quando você captou/contratou</div>
+        </div>
+        <div>
+          <label>Valor captado (R$)</label>
+          <input id="f_valor" type="number" step="0.01" min="0">
+          <div class="field-hint">Valor bruto contratado</div>
+        </div>
+        <div>
+          <label>Prazo pagamento (dias)</label>
+          <input id="f_prazo" type="number" min="0" value="30">
+          <div class="field-hint">Duração até quitar</div>
+        </div>
+        <div class="calc-row">
+          <label>Valor líquido recebido (R$)</label>
+          <input id="f_liquido" type="number" step="0.01" min="0">
+          <div class="field-hint">Auto (taxa fixa descontada)</div>
+        </div>
+        <div class="calc-row">
+          <label>Juros total (R$)</label>
+          <input id="f_juros" type="number" step="0.01" min="0">
+          <div class="field-hint">Auto (taxa × prazo)</div>
+        </div>
+        <div>
+          <label>Início pagamento</label>
+          <input id="f_inicio" type="date">
+          <div class="field-hint">Quando começa a sair do caixa</div>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="f_status">
+            <option value="planejada">Planejada</option>
+            <option value="executada">Executada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Observação</label>
+          <textarea id="f_obs" placeholder="ex: empréstimo capital de giro, parcelas 4×, gerente Carlos"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-primary" id="btn-salvar">Salvar</button>
+        <button class="btn-secondary" id="btn-cancelar" style="display:none;">Cancelar edição</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Decisões registradas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">Data</th>
+            <th>Alavanca</th>
+            <th style="width:120px; text-align:right;">Captado</th>
+            <th style="width:120px; text-align:right;">Líquido</th>
+            <th style="width:110px; text-align:right;">Juros</th>
+            <th style="width:90px;">Prazo</th>
+            <th style="width:110px;">Início pagto</th>
+            <th style="width:110px;">Status</th>
+            <th style="width:140px;">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer></script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var editandoId = null;
+    var alavancasMap = {};
+
+    function showMsg(t, ti) { var el = document.getElementById('msg'); el.className = 'msg show ' + ti; el.textContent = t; setTimeout(function() { el.className = 'msg'; }, 4000); }
+    function hojeISO() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function addDiasISO(iso, dias) { if (!iso) return ''; var d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + dias); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+    async function carregarAlavancas() {
+      var r = await sb.from('cash_alavancas').select('*').eq('ativo', true).order('nome');
+      var sel = document.getElementById('f_alavanca');
+      sel.innerHTML = '<option value="">— selecione —</option>';
+      (r.data || []).forEach(function(a) { sel.innerHTML += '<option value="' + a.id + '">' + a.nome + '</option>'; alavancasMap[a.id] = a; });
+    }
+
+    function recalcular() {
+      var alavId = document.getElementById('f_alavanca').value;
+      var valor = parseFloat(document.getElementById('f_valor').value) || 0;
+      var prazo = parseInt(document.getElementById('f_prazo').value) || 30;
+      if (!alavId || !valor) return;
+      var a = alavancasMap[alavId]; if (!a) return;
+      var taxaMes = Number(a.taxa_pct_mensal || 0);
+      var taxaFixa = Number(a.taxa_fixa_pct || 0);
+      var jurosVar = valor * (taxaMes / 100) * (prazo / 30);
+      var jurosFixo = valor * (taxaFixa / 100);
+      var jurosTotal = jurosVar + jurosFixo;
+      var liquido = valor - jurosFixo;
+      document.getElementById('f_juros').value = jurosTotal.toFixed(2);
+      document.getElementById('f_liquido').value = liquido.toFixed(2);
+      var dataDec = document.getElementById('f_data').value || hojeISO();
+      var inicioField = document.getElementById('f_inicio');
+      if (!inicioField.value) inicioField.value = addDiasISO(dataDec, Number(a.prazo_liberacao_dias || 0) + 30);
+      if (!document.getElementById('f_prazo').dataset.touched) document.getElementById('f_prazo').value = a.prazo_pagamento_dias || 30;
+    }
+
+    async function carregar() {
+      var r = await sb.from('cash_decisoes').select('*, cash_alavancas(nome)').order('data_decisao', { ascending: false });
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var dados = r.data || [];
+      var sCount = 0, sCaptado = 0, sJuros = 0;
+      var html = '';
+      dados.forEach(function(d) {
+        if (d.status !== 'cancelada') { sCount++; sCaptado += Number(d.valor_liquido || d.valor || 0); sJuros += Number(d.juros_total || 0); }
+        var alavNome = (d.cash_alavancas && d.cash_alavancas.nome) || '—';
+        html += '<tr>'
+             +  '<td>' + fmtDateBR(d.data_decisao) + '</td>'
+             +  '<td>' + alavNome + '</td>'
+             +  '<td class="valor-cell valor-ent">' + fmtBRL(d.valor) + '</td>'
+             +  '<td class="valor-cell valor-ent">' + fmtBRL(d.valor_liquido || 0) + '</td>'
+             +  '<td class="valor-cell valor-juros">' + fmtBRL(d.juros_total || 0) + '</td>'
+             +  '<td>' + (d.prazo_pagamento_dias || 0) + 'd</td>'
+             +  '<td>' + (d.data_inicio_pagamento ? fmtDateBR(d.data_inicio_pagamento) : '—') + '</td>'
+             +  '<td><span class="pill pill-' + (d.status || 'planejada') + '">' + (d.status || 'planejada').toUpperCase() + '</span></td>'
+             +  '<td><div class="row-actions">'
+             +     '<button class="btn-secondary" onclick="editar(\'' + d.id + '\')">Editar</button>'
+             +     '<button class="btn-danger" onclick="cancelar(\'' + d.id + '\')">Cancelar</button>'
+             +     '</div></td></tr>';
+      });
+      if (!html) html = '<tr><td colspan="9" style="text-align:center; color:#8b949e; padding:30px;">Nenhuma decisão registrada ainda.</td></tr>';
+      document.getElementById('tbody').innerHTML = html;
+      document.getElementById('s-count').textContent = sCount;
+      document.getElementById('s-captado').textContent = fmtBRL(sCaptado);
+      document.getElementById('s-juros').textContent = fmtBRL(sJuros);
+    }
+
+    function limparForm() {
+      editandoId = null;
+      document.getElementById('form-title').textContent = '+ Nova decisão';
+      document.getElementById('btn-cancelar').style.display = 'none';
+      ['f_alavanca','f_valor','f_liquido','f_juros','f_inicio','f_obs'].forEach(function(i) { document.getElementById(i).value = ''; });
+      document.getElementById('f_data').value = hojeISO();
+      document.getElementById('f_prazo').value = '30';
+      document.getElementById('f_prazo').dataset.touched = '';
+      document.getElementById('f_status').value = 'planejada';
+    }
+
+    window.editar = async function(id) {
+      var r = await sb.from('cash_decisoes').select('*').eq('id', id).single();
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      var d = r.data; editandoId = id;
+      document.getElementById('form-title').textContent = 'Editando decisão de ' + fmtDateBR(d.data_decisao);
+      document.getElementById('btn-cancelar').style.display = 'inline-block';
+      document.getElementById('f_alavanca').value = d.alavanca_id || '';
+      document.getElementById('f_data').value = d.data_decisao;
+      document.getElementById('f_valor').value = d.valor || '';
+      document.getElementById('f_liquido').value = d.valor_liquido || '';
+      document.getElementById('f_juros').value = d.juros_total || '';
+      document.getElementById('f_prazo').value = d.prazo_pagamento_dias || 30;
+      document.getElementById('f_prazo').dataset.touched = '1';
+      document.getElementById('f_inicio').value = d.data_inicio_pagamento || '';
+      document.getElementById('f_status').value = d.status || 'planejada';
+      document.getElementById('f_obs').value = d.observacao || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.cancelar = async function(id) {
+      if (!confirm('Marcar como cancelada?')) return;
+      var r = await sb.from('cash_decisoes').update({ status: 'cancelada' }).eq('id', id);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg('Decisão cancelada.', 'success'); carregar();
+    };
+
+    document.getElementById('btn-salvar').onclick = async function() {
+      var alavId = document.getElementById('f_alavanca').value;
+      var valor = parseFloat(document.getElementById('f_valor').value);
+      var data = document.getElementById('f_data').value;
+      if (!alavId) { showMsg('Selecione uma alavanca.', 'error'); return; }
+      if (!valor || valor <= 0) { showMsg('Valor é obrigatório.', 'error'); return; }
+      if (!data) { showMsg('Data da decisão é obrigatória.', 'error'); return; }
+      var payload = {
+        alavanca_id: alavId, data_decisao: data, valor: valor,
+        valor_liquido: parseFloat(document.getElementById('f_liquido').value) || valor,
+        juros_total: parseFloat(document.getElementById('f_juros').value) || 0,
+        prazo_pagamento_dias: parseInt(document.getElementById('f_prazo').value) || 30,
+        data_inicio_pagamento: document.getElementById('f_inicio').value || null,
+        status: document.getElementById('f_status').value,
+        observacao: document.getElementById('f_obs').value.trim() || null
+      };
+      var r;
+      if (editandoId) r = await sb.from('cash_decisoes').update(payload).eq('id', editandoId);
+      else            r = await sb.from('cash_decisoes').insert(payload);
+      if (r.error) { showMsg('Erro: ' + r.error.message, 'error'); return; }
+      showMsg(editandoId ? 'Atualizada. Volte ao Dashboard.' : 'Registrada. Volte ao Dashboard.', 'success');
+      limparForm(); carregar();
+    };
+
+    document.getElementById('btn-cancelar').onclick = limparForm;
+    ['f_alavanca','f_valor','f_prazo'].forEach(function(id) {
+      document.getElementById(id).addEventListener('change', recalcular);
+      document.getElementById(id).addEventListener('input', recalcular);
+    });
+    document.getElementById('f_prazo').addEventListener('input', function() { this.dataset.touched = '1'; });
+    document.getElementById('f_data').value = hojeISO();
+    carregarAlavancas().then(carregar);
+  </script>
+</body>
+</html>
