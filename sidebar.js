@@ -17,7 +17,8 @@
     { id: 'pendencias',    label: 'Pendencias',    href: 'pendencias.html',    icon: '⚠' },
     { id: 'investimentos', label: 'Investimentos', href: 'investimentos.html', icon: '▲' },
     { id: 'alavancas',     label: 'Alavancas',     href: 'alavancas.html',     icon: '≡' },
-    { id: 'categorias',    label: 'Categorias',    href: 'categorias.html',    icon: '▦' }
+    { id: 'categorias',    label: 'Categorias',    href: 'categorias.html',    icon: '▦' },
+    { id: 'mapeamento',    label: 'Mapeamento',    href: 'mapeamento.html',    icon: '⇆' }
   ];
 
   var css = ''
