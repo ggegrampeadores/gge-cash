@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caixa Semanal - GGE CASH</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>
+  <script src="config.js"><\/script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0d1117; color:#e6edf3; }
+    .main-with-sidebar { margin-left:48px; min-height:100vh; padding:20px 26px; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+    h1 { font-size:22px; font-weight:600; }
+    .meta { color:#8b949e; font-size:12px; margin-top:3px; }
+    .mono { font-family:'SF Mono',Menlo,monospace; }
+    .pos { color:#3fb950; } .neg { color:#f85149; } .blue { color:#58a6ff; } .amber { color:#d29922; }
+
+    button { padding:7px 14px; border:none; border-radius:5px; cursor:pointer; font-size:13px; font-weight:500; }
+    .btn-primary { background:#238636; color:#fff; } .btn-primary:hover { background:#2ea043; }
+    .btn-secondary { background:#30363d; color:#e6edf3; } .btn-secondary:hover { background:#3f444d; }
+    .btn-move { background:#1f3a5f; color:#fff; padding:3px 9px; font-size:11px; } .btn-move:hover { background:#316cb3; }
+    .btn-revert { background:#5c4d12; color:#fff; padding:3px 9px; font-size:11px; } .btn-revert:hover { background:#7d6817; }
+    .btn-pago { background:#0d3920; color:#3fb950; border:1px solid #1f5333; padding:3px 9px; font-size:11px; } .btn-pago:hover { background:#13502c; }
+
+    /* Header: saldo + extras */
+    .header-cards { display:grid; grid-template-columns:1.2fr 1fr 1fr 1fr; gap:12px; margin-bottom:18px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 16px; }
+    .card .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .card .valor { font-size:22px; font-weight:700; margin-top:4px; }
+    .card .sub { color:#8b949e; font-size:11px; margin-top:3px; }
+    .card input.saldo-input { width:100%; margin-top:6px; padding:7px 9px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:5px; font-size:15px; font-family:'SF Mono',Menlo,monospace; }
+    .inline-save { margin-top:7px; display:flex; gap:6px; }
+
+    .section-title { font-size:13px; font-weight:600; color:#c9d1d9; text-transform:uppercase; letter-spacing:.5px; margin:6px 0 10px; display:flex; justify-content:space-between; align-items:center; }
+    .link-btn { background:none; color:#58a6ff; padding:2px 4px; font-size:12px; text-transform:none; letter-spacing:0; }
+    .link-btn:hover { text-decoration:underline; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:9px 12px; border-bottom:1px solid #21262d; text-align:right; }
+    th { color:#8b949e; font-size:10px; text-transform:uppercase; letter-spacing:.3px; font-weight:600; background:#0d1117; }
+    th.l, td.l { text-align:left; }
+    .week-card { background:#161b22; border:1px solid #30363d; border-radius:8px; overflow:hidden; margin-bottom:20px; }
+    tr.semana-row { cursor:pointer; }
+    tr.semana-row:hover td { background:#1f2630; }
+    tr.semana-row.atual td.l { font-weight:700; }
+    tr.semana-row.neg-acum td { background:#1a0d0e; }
+    tr.semana-row.neg-acum:hover td { background:#241112; }
+    .week-num { color:#58a6ff; font-weight:700; }
+    .week-per { color:#8b949e; font-size:11px; margin-left:7px; }
+    .caret { color:#8b949e; margin-right:6px; display:inline-block; width:10px; }
+
+    tr.detail { display:none; } tr.detail.show { display:table-row; }
+    tr.detail td { background:#0d1117; padding:0; }
+    .days { padding:6px 10px 12px; }
+    .day { border-bottom:1px solid #161b22; padding:10px 6px; }
+    .day:last-child { border-bottom:none; }
+    .day-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+    .day-name { font-size:12px; font-weight:600; color:#c9d1d9; }
+    .day-name .dow { color:#8b949e; font-weight:400; margin-left:6px; font-size:11px; }
+    .day-saldo { font-size:12px; font-family:'SF Mono',Menlo,monospace; }
+    .day-empty { color:#6e7681; font-size:11px; font-style:italic; }
+    .line { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:4px 8px; font-size:12px; border-radius:4px; }
+    .line:hover { background:#161b22; }
+    .line .desc { color:#c9d1d9; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .line .tag { font-size:10px; color:#6e7681; margin-left:6px; }
+    .line .v { font-family:'SF Mono',Menlo,monospace; min-width:90px; text-align:right; }
+    .line .acts { display:flex; gap:5px; min-width:135px; justify-content:flex-end; }
+    .badge-ov { display:inline-block; padding:1px 6px; border-radius:9px; background:#332b09; color:#d29922; font-size:9px; font-weight:600; margin-left:5px; }
+    .badge-atraso { display:inline-block; padding:1px 6px; border-radius:9px; background:#3a1e1f; color:#f85149; font-size:9px; font-weight:600; margin-left:5px; }
+    .grp-h { font-size:10px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; margin:6px 8px 2px; }
+
+    .loading { text-align:center; padding:50px; color:#8b949e; }
+    .alerta { background:#3a1e1f; border:1px solid #6e2426; color:#f85149; padding:9px 13px; border-radius:5px; margin-bottom:12px; font-size:13px; }
+    .alerta.warn { background:#332b09; border-color:#5c4d12; color:#d29922; }
+    .msg { padding:9px 13px; border-radius:5px; margin-bottom:12px; font-size:13px; display:none; }
+    .msg.show { display:block; }
+    .msg.success { background:#0d3920; color:#3fb950; border:1px solid #1f5333; }
+    .msg.error { background:#3a1e1f; color:#f85149; border:1px solid #6e2426; }
+
+    /* modal */
+    .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal-bg.show { display:flex; }
+    .modal { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:22px; width:500px; max-width:92vw; }
+    .modal h3 { font-size:16px; margin-bottom:14px; }
+    .modal .info { background:#0d1117; padding:10px 12px; border-radius:5px; margin-bottom:14px; font-size:12px; }
+    .modal .info-row { display:flex; justify-content:space-between; padding:3px 0; }
+    .modal .info-row .lbl { color:#8b949e; }
+    .modal .info-row .val { font-family:'SF Mono',Menlo,monospace; color:#c9d1d9; }
+    .modal .form-row { margin-bottom:12px; }
+    .modal .form-row label { display:block; font-size:11px; color:#8b949e; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+    .modal .form-row input,.modal .form-row select,.modal .form-row textarea { width:100%; padding:8px 10px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:5px; font-size:13px; font-family:inherit; }
+    .calc { background:#1a2233; border-radius:5px; padding:10px 12px; margin-bottom:14px; }
+    .calc .label { font-size:10px; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; }
+    .calc .valor { font-size:17px; font-weight:700; font-family:'SF Mono',Menlo,monospace; margin-top:2px; color:#d29922; }
+    .calc .hint { font-size:11px; color:#8b949e; margin-top:4px; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+
+    /* previsao editor */
+    #prev-panel { display:none; }
+    #prev-panel.show { display:block; }
+    .prev-table input { width:74px; padding:4px 6px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:4px; font-size:11px; font-family:'SF Mono',Menlo,monospace; text-align:right; }
+    .prev-table td,.prev-table th { padding:5px 7px; font-size:11px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-with-sidebar">
+    <div class="topbar">
+      <div>
+        <h1>Caixa Semanal — o quebra-cabeça</h1>
+        <div class="meta" id="meta">carregando…</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-secondary" id="btn-prev">✎ Previsões</button>
+        <button class="btn-primary" id="btn-refresh">↻ Atualizar</button>
+      </div>
+    </div>
+
+    <div id="msg" class="msg"></div>
+    <div id="alertas"></div>
+
+    <!-- HEADER: saldo + extras (Parte 01) -->
+    <div class="header-cards">
+      <div class="card">
+        <div class="label">Saldo inicial (bancos hoje)</div>
+        <input class="saldo-input mono" id="saldo-input" type="text" placeholder="0,00">
+        <div class="inline-save">
+          <button class="btn-primary" id="btn-saldo" style="flex:1; padding:5px;">Salvar saldo de hoje</button>
+        </div>
+        <div class="sub" id="saldo-sub">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Entradas previstas (8 sem)</div>
+        <div class="valor pos mono" id="kpi-ent">—</div>
+        <div class="sub">previsão por canal, distribuída no dia</div>
+      </div>
+      <div class="card">
+        <div class="label">Saídas previstas (8 sem)</div>
+        <div class="valor neg mono" id="kpi-sai">—</div>
+        <div class="sub">Bling a pagar + extras − pagos</div>
+      </div>
+      <div class="card">
+        <div class="label">Acumulado no fim (8 sem)</div>
+        <div class="valor mono" id="kpi-acum">—</div>
+        <div class="sub" id="kpi-acum-sub">se nada mudar</div>
+      </div>
+    </div>
+
+    <!-- PREVISÕES editor -->
+    <div class="week-card" id="prev-panel">
+      <div style="padding:14px 16px; border-bottom:1px solid #30363d;" class="section-title">
+        Previsões semanais de entrada (edite e salve)
+        <button class="link-btn" id="btn-prev-close">fechar</button>
+      </div>
+      <div style="padding:10px 16px; overflow:auto;">
+        <div style="color:#8b949e; font-size:11px; margin-bottom:8px;">Marketplace: 1/3 na segunda, 1/6 de terça a sexta. &nbsp;•&nbsp; B2B / Venda Direta: 40% terça, 60% quinta. &nbsp;Semanas sem valor herdam a anterior.</div>
+        <table class="prev-table" id="prev-table"></table>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn-primary" id="btn-prev-save">Salvar previsões</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD semanal -->
+    <div class="section-title">Semana a semana <span style="font-weight:400; text-transform:none; color:#8b949e; letter-spacing:0;">(clique numa semana para abrir o dia a dia e mover/pagar)</span></div>
+    <div class="week-card">
+      <table>
+        <thead>
+          <tr>
+            <th class="l">Semana</th>
+            <th>Entradas</th>
+            <th>Saídas</th>
+            <th>Saldo da semana</th>
+            <th>Acumulado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"><tr><td colspan="5" class="loading">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL Mover -->
+  <div class="modal-bg" id="modal-mover">
+    <div class="modal">
+      <h3>Mover pagamento de data</h3>
+      <div class="info">
+        <div class="info-row"><span class="lbl">Fornecedor:</span><span class="val" id="mv-forn">—</span></div>
+        <div class="info-row"><span class="lbl">Histórico:</span><span class="val" id="mv-hist">—</span></div>
+        <div class="info-row"><span class="lbl">Valor:</span><span class="val" id="mv-valor">—</span></div>
+        <div class="info-row"><span class="lbl">Vencimento original:</span><span class="val" id="mv-orig">—</span></div>
+      </div>
+      <div class="form-row">
+        <label>Novo vencimento (data prevista)</label>
+        <input id="mv-data" type="date">
+      </div>
+      <div class="calc">
+        <div class="label">Dias de atraso</div>
+        <div class="valor" id="mv-dias">—</div>
+        <div class="hint" id="mv-catinfo">—</div>
+        <div class="label" style="margin-top:8px;">Custo estimado do atraso</div>
+        <div class="valor" id="mv-custo">R$ 0,00</div>
+      </div>
+      <div class="form-row">
+        <label>Motivo</label>
+        <select id="mv-motivo">
+          <option value="atraso_voluntario">Atraso voluntário</option>
+          <option value="antecipacao">Antecipação</option>
+          <option value="agrupamento">Agrupamento de pagamentos</option>
+          <option value="feriado_dia_util">Feriado / dia útil</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="mv-cancelar">Cancelar</button>
+        <button class="btn-primary" id="mv-salvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL Pago -->
+  <div class="modal-bg" id="modal-pago">
+    <div class="modal">
+      <h3>Marcar como pago</h3>
+      <div class="info">
+        <div class="info-row"><span class="lbl">Item:</span><span class="val" id="pg-desc">—</span></div>
+        <div class="info-row"><span class="lbl">Valor:</span><span class="val" id="pg-valor">—</span></div>
+      </div>
+      <div class="form-row">
+        <label>Pago em</label>
+        <input id="pg-data" type="date">
+      </div>
+      <div class="form-row">
+        <label>Saiu de qual banco? (informativo)</label>
+        <input id="pg-banco" type="text" placeholder="Bradesco / Cora / …">
+      </div>
+      <div class="alerta warn" style="margin-bottom:14px;">💡 Pagou? O dinheiro saiu do banco. Depois de confirmar, <strong>ajuste o saldo dos bancos no topo</strong> para o caixa continuar batendo.</div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="pg-cancelar">Cancelar</button>
+        <button class="btn-primary" id="pg-salvar">Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidebar.js" defer><\/script>
+  <script>
+    var sb = supabase.createClient(window.GGE_SUPABASE_URL, window.GGE_SUPABASE_KEY);
+    var ANO = 2026, N_SEMANAS = 8;
+
+    var MKT = { ml_gge_rj:'ML GGE RJ', ml_gge_sp:'ML GGE SP', ml_toow:'ML TOOW', shopee_gge_rj:'Shopee RJ', shopee_gge_sp:'Shopee SP' };
+    var B2B = { b2b_francisco:'B2B Francisco', b2b_lorena:'B2B Lorena', b2b_matheus:'B2B Matheus' };
+    var CANAIS = Object.assign({}, MKT, B2B);
+    var CANAL_ORDER = Object.keys(MKT).concat(Object.keys(B2B));
+    // distribuição diária (idx 0=seg .. 6=dom)
+    var DIST_MKT = [1/3, 1/6, 1/6, 1/6, 1/6, 0, 0];
+    var DIST_B2B = [0, 0.4, 0, 0.6, 0, 0, 0];
+    function distDe(canal){ return MKT[canal] ? DIST_MKT : DIST_B2B; }
+
+    // ---- estado ----
+    var SALDO = 0, SALDO_DATA = null;
+    var metaMap = {};        // metaMap[semana][canal] = valor
+    var metaId  = {};        // metaId[semana+'|'+canal] = id
+    var semanasComMeta = []; // ordenadas
+    var pagar = [];          // bling a pagar abertos
+    var overrides = {};      // bling_id -> override
+    var baixas = {};         // bling_id -> baixa
+    var extras = [];         // cash_lancamentos_extras
+    var catById = {};        // bling_categoria_id -> categoria
+    var SEMANAS = [];        // estrutura calculada
+    var movendo = null, pagando = null;
+
+    // ---- helpers ----
+    function hojeISO(){ var d=new Date(); return iso(d); }
+    function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    function parseISO(s){ return new Date(s+'T00:00:00'); }
+    function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
+    function diasEntre(a,b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
+    function num(v){ var n=Number(v); return isNaN(n)?0:n; }
+    function parseBRL(s){ if(typeof s==='number') return s; s=String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
+    function cls(v){ return num(v)>=0?'pos':'neg'; }
+    function showMsg(t,tipo){ var el=document.getElementById('msg'); el.className='msg show '+tipo; el.textContent=t; setTimeout(function(){el.className='msg';},4500); }
+
+    function vencEfetivo(item){ var o=overrides[item.bling_id]; return o?o.data_nova:item.vencimento; }
+    function getMeta(sem,canal){
+      for(var s=sem; s>=Math.min.apply(null, semanasComMeta.concat([sem])); s--){
+        if(metaMap[s] && metaMap[s][canal]!=null) return num(metaMap[s][canal]);
+      }
+      return 0;
+    }
+
+    // ---- carga ----
+    async function carregar(){
+      var btn=document.getElementById('btn-refresh'); btn.disabled=true; btn.textContent='↻ …';
+      try {
+        // saldo
+        var rS = await sb.from('cash_saldos_bancarios').select('*').order('data',{ascending:false}).order('criado_em',{ascending:false}).limit(10);
+        var sdata = rS.data||[];
+        if(sdata.length){ SALDO = num(sdata[0].saldo); SALDO_DATA = sdata[0].data; }
+        else { SALDO=0; SALDO_DATA=null; }
+
+        // metas
+        var rM = await sb.from('cash_metas_vendas').select('*').eq('ano',ANO);
+        metaMap={}; metaId={};
+        (rM.data||[]).forEach(function(m){
+          if(!metaMap[m.semana]) metaMap[m.semana]={};
+          metaMap[m.semana][m.canal]=num(m.valor_meta);
+          metaId[m.semana+'|'+m.canal]=m.id;
+        });
+        semanasComMeta = Object.keys(metaMap).map(Number).sort(function(a,b){return a-b;});
+
+        // categorias
+        var rC = await sb.from('cash_categorias').select('*');
+        catById={}; (rC.data||[]).forEach(function(c){ if(c.bling_categoria_id) catById[String(c.bling_categoria_id)]=c; });
+
+        // pagar (paginado)
+        pagar=[]; var from=0;
+        while(true){
+          var r = await sb.from('cash_bling_pagar_cache').select('*').eq('status','1').range(from,from+999);
+          if(r.error){ showMsg('Erro a pagar: '+r.error.message,'error'); break; }
+          var d=r.data||[]; pagar=pagar.concat(d);
+          if(d.length<1000) break; from+=1000; if(from>40000) break;
+        }
+
+        // overrides + baixas + extras
+        var rO = await sb.from('cash_overrides_pagamento').select('*');
+        overrides={}; (rO.data||[]).forEach(function(o){ overrides[o.bling_conta_id]=o; });
+        var rB = await sb.from('cash_baixas').select('*');
+        baixas={}; (rB.data||[]).forEach(function(b){ baixas[b.bling_conta_id]=b; });
+        var rE = await sb.from('cash_lancamentos_extras').select('*');
+        extras = rE.data||[];
+
+        montarSemanas();
+        renderHeader();
+        renderDashboard();
+        renderPrevTable();
+        renderAlertas();
+        document.getElementById('meta').textContent = 'Atualizado '+new Date().toLocaleString('pt-BR')+' • '+pagar.length+' títulos a pagar • acumulado parte de '+(SALDO_DATA?fmtDateBR(SALDO_DATA):'sem saldo');
+      } catch(e){ showMsg('Erro: '+(e.message||e),'error'); }
+      finally { btn.disabled=false; btn.textContent='↻ Atualizar'; }
+    }
+
+    // ---- cálculo das semanas ----
+    function montarSemanas(){
+      var hoje=hojeISO();
+      // segunda-feira da semana atual em horário LOCAL (evita bug de UTC)
+      var today=new Date(); var t0=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+      var dow=(t0.getDay()+6)%7; var monday0=addDays(t0,-dow);
+      SEMANAS=[];
+      for(var i=0;i<N_SEMANAS;i++){
+        var seg = addDays(monday0, 7*i);
+        var sem = semanaIso(seg).semana;
+        var dias=[];
+        for(var k=0;k<7;k++){
+          var dt = addDays(seg,k);
+          dias.push({ idx:k, iso:iso(dt), dow:['seg','ter','qua','qui','sex','sáb','dom'][k], futuro: iso(dt)>=hoje });
+        }
+        SEMANAS.push({ semana:sem, ini:dias[0].iso, fim:dias[6].iso, dias:dias, ent:0, sai:0, entByDay:{}, saiItems:{}, extByDay:{} });
+      }
+      // entradas previstas por dia
+      SEMANAS.forEach(function(w){
+        w.dias.forEach(function(dia){ w.entByDay[dia.iso]=[]; });
+        CANAL_ORDER.forEach(function(canal){
+          var wk = getMeta(w.semana, canal); if(!wk) return;
+          var dist = distDe(canal);
+          w.dias.forEach(function(dia){
+            var v = wk*dist[dia.idx];
+            if(v>0){ w.entByDay[dia.iso].push({ canal:canal, label:CANAIS[canal], valor:v }); if(dia.futuro) w.ent+=v; }
+          });
+        });
+      });
+      // saídas: bling a pagar (não baixados) por data efetiva
+      var byWeek={}; SEMANAS.forEach(function(w){ byWeek[w.semana]=w; });
+      pagar.forEach(function(item){
+        if(baixas[item.bling_id]) return;
+        var ve = vencEfetivo(item);
+        var winfo = semanaIso(parseISO(ve));
+        var w = byWeek[winfo.semana];
+        if(!w) return;
+        if(!w.saiItems[ve]) w.saiItems[ve]=[];
+        w.saiItems[ve].push(item);
+        if(ve>=hojeISO()) w.sai += num(item.valor);
+      });
+      // extras por dia
+      extras.forEach(function(ex){
+        var winfo = semanaIso(parseISO(ex.data)); var w=byWeek[winfo.semana]; if(!w) return;
+        if(!w.extByDay[ex.data]) w.extByDay[ex.data]=[];
+        w.extByDay[ex.data].push(ex);
+        var sai = /sa[ií]da/i.test(ex.tipo||'');
+        if(ex.data>=hojeISO()){ if(sai) w.sai+=num(ex.valor); else w.ent+=num(ex.valor); }
+      });
+      // acumulado
+      var acum=SALDO;
+      SEMANAS.forEach(function(w){ w.saldo=w.ent-w.sai; acum+=w.saldo; w.acum=acum; });
+    }
+
+    // ---- render header ----
+    function renderHeader(){
+      document.getElementById('saldo-input').value = SALDO ? SALDO.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+      document.getElementById('saldo-sub').textContent = SALDO_DATA ? ('lançado em '+fmtDateBR(SALDO_DATA)) : 'nenhum saldo lançado — informe o saldo de hoje';
+      var te=0,ts=0; SEMANAS.forEach(function(w){ te+=w.ent; ts+=w.sai; });
+      document.getElementById('kpi-ent').textContent=fmtBRL(te);
+      document.getElementById('kpi-sai').textContent=fmtBRL(ts);
+      var fim = SEMANAS.length?SEMANAS[SEMANAS.length-1].acum:SALDO;
+      var el=document.getElementById('kpi-acum'); el.textContent=fmtBRL(fim); el.className='valor mono '+cls(fim);
+    }
+
+    function renderAlertas(){
+      var html='';
+      if(!SALDO_DATA) html+='<div class="alerta warn">⚠ Nenhum saldo bancário lançado — o acumulado parte de zero. Informe o saldo de hoje no topo.</div>';
+      var primNeg = SEMANAS.find(function(w){ return w.acum<0; });
+      if(primNeg) html+='<div class="alerta">⚠ O caixa fica <strong>negativo</strong> na semana '+primNeg.semana+' ('+periodo(primNeg)+'): acumulado '+fmtBRL(primNeg.acum)+'. Mova pagamentos dessa semana (ou antes) para resolver.</div>';
+      document.getElementById('alertas').innerHTML=html;
+    }
+
+    function periodo(w){ var a=parseISO(w.ini),b=parseISO(w.fim); var f=function(d){return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');}; return f(a)+'–'+f(b); }
+
+    // ---- render dashboard ----
+    function renderDashboard(){
+      var hojeSem = semanaIso(new Date()).semana;
+      var html='';
+      SEMANAS.forEach(function(w,i){
+        var classes='semana-row'+(w.semana===hojeSem?' atual':'')+(w.acum<0?' neg-acum':'');
+        html+='<tr class="'+classes+'" data-idx="'+i+'">'
+          +'<td class="l"><span class="caret" id="caret-'+i+'">▸</span><span class="week-num">S'+w.semana+'</span><span class="week-per">'+periodo(w)+'</span>'+(w.semana===hojeSem?' <span style="color:#58a6ff;font-size:10px;">• atual</span>':'')+'</td>'
+          +'<td class="pos mono">'+fmtBRL(w.ent)+'</td>'
+          +'<td class="neg mono">'+fmtBRL(w.sai)+'</td>'
+          +'<td class="mono '+cls(w.saldo)+'">'+fmtBRL(w.saldo)+'</td>'
+          +'<td class="mono '+cls(w.acum)+'" style="font-weight:700;">'+fmtBRL(w.acum)+'</td>'
+          +'</tr>'
+          +'<tr class="detail" id="detail-'+i+'"><td colspan="5"><div class="days" id="days-'+i+'"></div></td></tr>';
+      });
+      document.getElementById('tbody').innerHTML=html;
+      document.querySelectorAll('.semana-row').forEach(function(row){
+        row.addEventListener('click', function(){ toggleWeek(parseInt(row.dataset.idx)); });
+      });
+    }
+
+    function toggleWeek(i){
+      var det=document.getElementById('detail-'+i); var caret=document.getElementById('caret-'+i);
+      var show=!det.classList.contains('show');
+      det.classList.toggle('show', show); caret.textContent = show?'▾':'▸';
+      if(show) renderDays(i);
+    }
+
+    function renderDays(i){
+      var w=SEMANAS[i]; var hoje=hojeISO();
+      var run = i===0?SALDO:SEMANAS[i-1].acum; // saldo acumulado no início da semana
+      var html='';
+      w.dias.forEach(function(dia){
+        var ents=w.entByDay[dia.iso]||[];
+        var sais=(w.saiItems[dia.iso]||[]);
+        var exs=(w.extByDay[dia.iso]||[]);
+        var entExtras=exs.filter(function(e){return !/sa[ií]da/i.test(e.tipo||'');});
+        var saiExtras=exs.filter(function(e){return /sa[ií]da/i.test(e.tipo||'');});
+        var totEnt=ents.reduce(function(a,x){return a+x.valor;},0)+entExtras.reduce(function(a,x){return a+num(x.valor);},0);
+        var totSai=sais.reduce(function(a,x){return a+num(x.valor);},0)+saiExtras.reduce(function(a,x){return a+num(x.valor);},0);
+        var passado = dia.iso<hoje;
+        if(!passado) run += (totEnt-totSai);
+        if(ents.length===0 && sais.length===0 && exs.length===0){
+          html+='<div class="day"><div class="day-head"><span class="day-name">'+fmtDateBR(dia.iso)+'<span class="dow">'+dia.dow+'</span></span><span class="day-empty">sem movimento</span></div></div>';
+          return;
+        }
+        html+='<div class="day"><div class="day-head"><span class="day-name">'+fmtDateBR(dia.iso)+'<span class="dow">'+dia.dow+'</span>'+(passado?' <span class="day-empty">(passado — já no saldo)</span>':'')+'</span>'
+          +'<span class="day-saldo '+(passado?'':cls(run))+'">'+(passado?'':'saldo no dia: '+fmtBRL(run))+'</span></div>';
+        // entradas
+        if(ents.length||entExtras.length){
+          html+='<div class="grp-h">Entradas previstas</div>';
+          ents.forEach(function(e){ html+='<div class="line"><span class="desc">'+e.label+'<span class="tag">previsão</span></span><span class="v pos">'+fmtBRL(e.valor)+'</span></div>'; });
+          entExtras.forEach(function(e){ html+='<div class="line"><span class="desc">'+(e.descricao||e.categoria||'Extra')+'<span class="tag">extra</span></span><span class="v pos">'+fmtBRL(e.valor)+'</span></div>'; });
+        }
+        // saídas
+        if(sais.length||saiExtras.length){
+          html+='<div class="grp-h">Saídas</div>';
+          sais.forEach(function(item){
+            var o=overrides[item.bling_id];
+            var atraso = o?diasEntre(item.vencimento,o.data_nova):0;
+            var badge = o?'<span class="badge-ov">movido +'+atraso+'d</span>':'';
+            var desc=(item.fornecedor||item.historico||'—');
+            html+='<div class="line"><span class="desc" title="'+(item.historico||'').replace(/"/g,'')+'">'+desc+badge+'</span>'
+              +'<span class="v neg">'+fmtBRL(item.valor)+'</span>'
+              +'<span class="acts">'
+              +'<button class="btn-move" onclick="abrirMover(\''+item.bling_id+'\')">Mover</button>'
+              +(o?'<button class="btn-revert" onclick="reverter(\''+item.bling_id+'\')">↩</button>':'')
+              +'<button class="btn-pago" onclick="abrirPago(\''+item.bling_id+'\')">Pago</button>'
+              +'</span></div>';
+          });
+          saiExtras.forEach(function(e){ html+='<div class="line"><span class="desc">'+(e.descricao||e.categoria||'Extra')+'<span class="tag">extra</span></span><span class="v neg">'+fmtBRL(e.valor)+'</span><span class="acts"></span></div>'; });
+        }
+        html+='</div>';
+      });
+      document.getElementById('days-'+i).innerHTML=html;
+    }
+
+    // ---- previsões editor ----
+    document.getElementById('btn-prev').onclick=function(){ document.getElementById('prev-panel').classList.toggle('show'); };
+    document.getElementById('btn-prev-close').onclick=function(){ document.getElementById('prev-panel').classList.remove('show'); };
+    function renderPrevTable(){
+      var hojeSem=semanaIso(new Date()).semana;
+      var html='<thead><tr><th class="l">Canal</th>';
+      for(var i=0;i<N_SEMANAS;i++){ var s=hojeSem+i; html+='<th>S'+s+'</th>'; }
+      html+='</tr></thead><tbody>';
+      CANAL_ORDER.forEach(function(canal){
+        html+='<tr><td class="l" style="color:#c9d1d9;">'+CANAIS[canal]+'</td>';
+        for(var i=0;i<N_SEMANAS;i++){
+          var s=hojeSem+i; var has = metaMap[s]&&metaMap[s][canal]!=null;
+          var val = has?num(metaMap[s][canal]):getMeta(s,canal);
+          html+='<td><input data-sem="'+s+'" data-canal="'+canal+'" value="'+(val||0)+'"'+(has?'':' style="color:#6e7681;" title="herdado"')+'></td>';
+        }
+        html+='</tr>';
+      });
+      html+='</tbody>';
+      document.getElementById('prev-table').innerHTML=html;
+    }
+    document.getElementById('btn-prev-save').onclick=async function(){
+      var inputs=document.querySelectorAll('#prev-table input'); var ops=[];
+      inputs.forEach(function(inp){
+        var sem=parseInt(inp.dataset.sem), canal=inp.dataset.canal, v=parseBRL(inp.value);
+        var key=sem+'|'+canal; var existId=metaId[key];
+        var atual = (metaMap[sem]&&metaMap[sem][canal]!=null)?num(metaMap[sem][canal]):null;
+        if(existId){ if(atual!==v) ops.push(sb.from('cash_metas_vendas').update({valor_meta:v}).eq('id',existId)); }
+        else if(v>0){ ops.push(sb.from('cash_metas_vendas').insert({ano:ANO,semana:sem,canal:canal,valor_meta:v,valor_realizado:0,congelada:false})); }
+      });
+      if(!ops.length){ showMsg('Nada mudou.','success'); return; }
+      try{ await Promise.all(ops); showMsg('Previsões salvas ('+ops.length+').','success'); await carregar(); }
+      catch(e){ showMsg('Erro ao salvar previsões: '+(e.message||e),'error'); }
+    };
+
+    // ---- saldo ----
+    document.getElementById('btn-saldo').onclick=async function(){
+      var v=parseBRL(document.getElementById('saldo-input').value);
+      // atualiza a linha de hoje se já existir (evita empilhar / dobrar saldo)
+      var rEx=await sb.from('cash_saldos_bancarios').select('id').eq('data',hojeISO()).eq('banco','consolidado').limit(1);
+      var r;
+      if(rEx.data && rEx.data.length) r=await sb.from('cash_saldos_bancarios').update({saldo:v,observacao:'lançado no Caixa Semanal'}).eq('id',rEx.data[0].id);
+      else r=await sb.from('cash_saldos_bancarios').insert({data:hojeISO(),banco:'consolidado',saldo:v,observacao:'lançado no Caixa Semanal'});
+      if(r.error){ showMsg('Erro ao salvar saldo: '+r.error.message,'error'); return; }
+      showMsg('Saldo de hoje salvo: '+fmtBRL(v),'success'); await carregar();
+    };
+
+    // ---- mover ----
+    window.abrirMover=function(blingId){
+      var item=pagar.find(function(x){return x.bling_id===blingId;}); if(!item) return; movendo=item;
+      var o=overrides[blingId];
+      document.getElementById('mv-forn').textContent=item.fornecedor||'—';
+      document.getElementById('mv-hist').textContent=item.historico||'—';
+      document.getElementById('mv-valor').textContent=fmtBRL(item.valor);
+      document.getElementById('mv-orig').textContent=fmtDateBR(item.vencimento);
+      document.getElementById('mv-data').value=o?o.data_nova:item.vencimento;
+      document.getElementById('mv-motivo').value=o?o.motivo:'atraso_voluntario';
+      var cat=catById[String(item.categoria_bling)];
+      document.getElementById('mv-catinfo').textContent = cat?('Categoria: '+cat.nome+' • Prioridade '+cat.prioridade+' • Máx '+cat.dias_max_atraso+'d • '+Number(cat.custo_dia_atraso_pct||0).toFixed(3)+'%/dia + '+fmtBRL(cat.custo_dia_atraso_fixo||0)+'/dia'):'Sem categoria mapeada — custo do atraso = 0.';
+      recalcMover();
+      document.getElementById('modal-mover').classList.add('show');
+    };
+    function recalcMover(){
+      if(!movendo) return; var nova=document.getElementById('mv-data').value;
+      if(!nova){ document.getElementById('mv-dias').textContent='—'; document.getElementById('mv-custo').textContent='R$ 0,00'; return; }
+      var dias=diasEntre(movendo.vencimento,nova);
+      var cat=catById[String(movendo.categoria_bling)]; var custo=0;
+      var txt=dias+(Math.abs(dias)===1?' dia':' dias');
+      if(cat && dias>0){ custo=(num(cat.custo_dia_atraso_pct)/100)*num(movendo.valor)*dias + num(cat.custo_dia_atraso_fixo)*dias; if(cat.dias_max_atraso && dias>cat.dias_max_atraso) txt=dias+' dias ⚠ excede o máximo de '+cat.dias_max_atraso+'d'; }
+      document.getElementById('mv-dias').textContent=txt; document.getElementById('mv-custo').textContent=fmtBRL(custo); movendo._custo=custo;
+    }
+    document.getElementById('mv-data').addEventListener('input',recalcMover);
+    document.getElementById('mv-cancelar').onclick=function(){ document.getElementById('modal-mover').classList.remove('show'); movendo=null; };
+    document.getElementById('mv-salvar').onclick=async function(){
+      if(!movendo) return; var nova=document.getElementById('mv-data').value; if(!nova){ showMsg('Defina a nova data.','error'); return; }
+      var payload={ bling_conta_id:String(movendo.bling_id), data_original:movendo.vencimento, data_nova:nova, motivo:document.getElementById('mv-motivo').value, custo_atraso:movendo._custo||0 };
+      var ex=overrides[movendo.bling_id]; var r = ex?await sb.from('cash_overrides_pagamento').update(payload).eq('id',ex.id):await sb.from('cash_overrides_pagamento').insert(payload);
+      if(r.error){ showMsg('Erro: '+r.error.message,'error'); return; }
+      document.getElementById('modal-mover').classList.remove('show'); movendo=null;
+      showMsg('Pagamento movido. Caixa recalculado.','success'); await carregar();
+    };
+    window.reverter=async function(blingId){
+      var o=overrides[blingId]; if(!o) return; if(!confirm('Reverter para o vencimento original?')) return;
+      var r=await sb.from('cash_overrides_pagamento').delete().eq('id',o.id);
+      if(r.error){ showMsg('Erro: '+r.error.message,'error'); return; }
+      showMsg('Movimentação revertida.','success'); await carregar();
+    };
+
+    // ---- pago ----
+    window.abrirPago=function(blingId){
+      var item=pagar.find(function(x){return x.bling_id===blingId;}); if(!item) return; pagando=item;
+      document.getElementById('pg-desc').textContent=(item.fornecedor||item.historico||'—');
+      document.getElementById('pg-valor').textContent=fmtBRL(item.valor);
+      document.getElementById('pg-data').value=hojeISO();
+      document.getElementById('pg-banco').value='';
+      document.getElementById('modal-pago').classList.add('show');
+    };
+    document.getElementById('pg-cancelar').onclick=function(){ document.getElementById('modal-pago').classList.remove('show'); pagando=null; };
+    document.getElementById('pg-salvar').onclick=async function(){
+      if(!pagando) return;
+      var payload={ bling_conta_id:String(pagando.bling_id), tipo:'pagar', data_pago:document.getElementById('pg-data').value||hojeISO(), banco:document.getElementById('pg-banco').value.trim()||null, valor:num(pagando.valor) };
+      var r=await sb.from('cash_baixas').upsert(payload,{onConflict:'bling_conta_id,tipo'});
+      if(r.error){ showMsg('Erro: '+r.error.message,'error'); return; }
+      document.getElementById('modal-pago').classList.remove('show');
+      var v=num(pagando.valor); pagando=null;
+      showMsg('Pago e baixado do caixa. Agora ajuste o saldo dos bancos no topo (saiu '+fmtBRL(v)+').','success');
+      document.getElementById('saldo-input').focus(); document.getElementById('saldo-input').scrollIntoView({behavior:'smooth',block:'center'});
+      await carregar();
+    };
+
+    document.getElementById('btn-refresh').onclick=carregar;
+    carregar(); // iniciar
+  <\/script>
+</body>
+</html>
