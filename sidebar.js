@@ -9,6 +9,7 @@
 
   var items = [
     { id: 'index',         label: 'Dashboard',     href: 'index.html',         icon: '▤' },
+    { id: 'caixa',         label: 'Caixa Semanal', href: 'caixa.html',         icon: '▥' },
     { id: 'saldos',        label: 'Saldos',        href: 'saldos.html',        icon: '◎' },
     { id: 'metas',         label: 'Metas',         href: 'metas.html',         icon: '○' },
     { id: 'decisoes',      label: 'Decisões',      href: 'decisoes.html',      icon: '★' },
