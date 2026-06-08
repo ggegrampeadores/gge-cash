@@ -367,17 +367,18 @@
           });
         });
       });
-      // saídas: bling a pagar (não baixados) por data efetiva
+      // saídas: bling a pagar (não baixados). Vencido e não pago CONTINUA valendo — cai na semana atual.
       var byWeek={}; SEMANAS.forEach(function(w){ byWeek[w.semana]=w; });
       pagar.forEach(function(item){
         if(baixas[item.bling_id]) return;
         var ve = vencEfetivo(item);
-        var winfo = semanaIso(parseISO(ve));
-        var w = byWeek[winfo.semana];
+        var w, dia;
+        if(ve < hoje){ w = SEMANAS[0]; dia = hoje; item._vencido = true; item._diasVenc = diasEntre(ve, hoje); }
+        else { w = byWeek[semanaIso(parseISO(ve)).semana]; dia = ve; item._vencido = false; }
         if(!w) return;
-        if(!w.saiItems[ve]) w.saiItems[ve]=[];
-        w.saiItems[ve].push(item);
-        if(ve>=hojeISO()) w.sai += num(item.valor);
+        if(!w.saiItems[dia]) w.saiItems[dia]=[];
+        w.saiItems[dia].push(item);
+        w.sai += num(item.valor);
       });
       // extras por dia
       extras.forEach(function(ex){
@@ -474,6 +475,7 @@
             var o=overrides[item.bling_id];
             var atraso = o?diasEntre(item.vencimento,o.data_nova):0;
             var badge = o?'<span class="badge-ov">movido +'+atraso+'d</span>':'';
+            if(item._vencido) badge += '<span class="badge-atraso">VENCIDO '+item._diasVenc+'d</span>';
             var desc=(item.fornecedor||item.historico||'—');
             html+='<div class="line"><span class="desc" title="'+(item.historico||'').replace(/"/g,'')+'">'+desc+badge+'</span>'
               +'<span class="v neg">'+fmtBRL(item.valor)+'</span>'
